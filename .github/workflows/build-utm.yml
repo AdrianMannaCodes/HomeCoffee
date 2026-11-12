@@ -20,7 +20,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -29,6 +29,7 @@ jobs:
     env:
       ARCH: ${{ inputs.arch || 'x86_64' }}
       DISK_GB: ${{ inputs.disk_size_gb || '4' }}
+      RELEASE_TAG: nightly
     steps:
       - name: Step 1 - checkout
         uses: actions/checkout@v4
@@ -48,7 +49,7 @@ jobs:
           echo "[workflow] apt-get update"
           apt_retry update || { echo '::error::apt-get update failed'; exit 1; }
           echo "[workflow] installing disk/filesystem tools"
-          apt_retry install -y --no-install-recommends gdisk dosfstools e2fsprogs util-linux parted kpartx curl ca-certificates \
+          apt_retry install -y --no-install-recommends gdisk dosfstools e2fsprogs util-linux parted kpartx curl ca-certificates zip \
             || { echo '::error::apt-get install of base tools failed'; exit 1; }
           if [ "$ARCH" = aarch64 ]; then
             echo "[workflow] aarch64 requested: installing qemu-user-static for emulation"
@@ -83,21 +84,39 @@ jobs:
           echo "=== TAIL OF BUILD LOG ==="
           tail -n 150 build.log || true
 
-      - name: Step 5 - verify bundle
+      - name: Step 5 - verify bundle and zip it
+        shell: bash
         run: |
+          set -e
           echo "[workflow] bundle contents:"
           find build/HomeCoffee.utm -maxdepth 2 -exec ls -ld {} \;
           test -f build/HomeCoffee.utm/config.plist
           test -f build/HomeCoffee.utm/Data/disk.img
-          echo "[workflow] bundle verified"
+          cd build
+          ZIP="HomeCoffee-${ARCH}.utm.zip"
+          rm -f "$ZIP" "$ZIP.sha256"
+          zip -r -q "$ZIP" HomeCoffee.utm
+          sha256sum "$ZIP" > "$ZIP.sha256"
+          echo "[workflow] created $ZIP:"
+          ls -lh "$ZIP" "$ZIP.sha256"
+          unzip -l "$ZIP" | tail -n 5
 
-      - name: Step 6 - upload HomeCoffee.utm folder
-        uses: actions/upload-artifact@v4
+      - name: Step 6 - publish to rolling GitHub Release
+        if: success()
+        uses: softprops/action-gh-release@v2
         with:
-          name: HomeCoffee-${{ env.ARCH }}
-          path: build/HomeCoffee.utm
-          if-no-files-found: error
-          retention-days: 14
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: HomeCoffee nightly (${{ env.ARCH }})
+          prerelease: true
+          make_latest: false
+          fail_on_unmatched_files: true
+          body: |
+            Automated build from commit ${{ github.sha }} (${{ github.ref_name }}).
+            Download HomeCoffee-${{ env.ARCH }}.utm.zip, unzip it, and open HomeCoffee.utm in UTM.
+            This is a development build.
+          files: |
+            build/HomeCoffee-${{ env.ARCH }}.utm.zip
+            build/HomeCoffee-${{ env.ARCH }}.utm.zip.sha256
 
       - name: Step 7 - upload build log on failure
         if: failure()
