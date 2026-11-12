@@ -93,7 +93,13 @@ if [ -n "$QEMU_BIN" ] && [ "$ARCH" != "$(uname -m)" ]; then
   cp "$QEMU_PATH" "$MNT/usr/bin/$QEMU_BIN"
   chmod +x "$MNT/usr/bin/$QEMU_BIN"
 fi
-for d in proc sys dev; do mount --rbind "/$d" "$MNT/$d"; done
+# Bind the pseudo-filesystems into the chroot. Each mount reports its own error.
+mkdir -p "$MNT/proc" "$MNT/sys" "$MNT/dev"
+mount -t proc proc "$MNT/proc" || { echo '::error::mount proc failed' >&2; exit 1; }
+mount -t sysfs sys "$MNT/sys" || { echo '::error::mount sysfs failed' >&2; exit 1; }
+mount -t devtmpfs devtmpfs "$MNT/dev" || mount --bind /dev "$MNT/dev" || { echo '::error::mount dev failed' >&2; exit 1; }
+mkdir -p "$MNT/dev/pts"
+mount -t devpts devpts "$MNT/dev/pts" 2>/dev/null || true
 
 # 4. Install packages in the chroot.
 log "installing packages in chroot"
@@ -121,7 +127,7 @@ chroot "$MNT" /bin/sh -c 'grub-mkconfig -o /boot/grub/grub.cfg'
 chroot "$MNT" /bin/sh -c 'rc-update add devfs sysinit; rc-update add networking boot; rc-update add hwclock boot' || log 'warning: rc-update returned non-zero'
 
 # 8. Unmount and detach (EXIT trap also covers failures).
-for d in dev sys proc; do umount -R "$MNT/$d" 2>/dev/null || true; done
+for d in dev/pts dev sys proc; do umount "$MNT/$d" 2>/dev/null || true; done
 umount "$MNT/boot/efi"
 umount "$MNT"
 losetup -d "$LOOP"
