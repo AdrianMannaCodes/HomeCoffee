@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Builds HomeCoffee.utm: an Alpine-based raw disk image (EFI + root) plus UTM config.
+# Builds HomeCoffee.utm: a minimal console-only Alpine raw disk image (EFI + root) plus UTM config.
 # Must run as root (sudo) on a Linux host. Env: ARCH (x86_64|aarch64, default x86_64), DISK_GB (default 2).
 # Output: build/HomeCoffee.utm/{config.plist,Data/disk.img} (unzipped bundle folder).
 # config.plist follows UTM's Configuration/*.swift decoders (ConfigurationVersion 4, singular Display/Drive/Network keys).
-# qemu-user emulation is only used when ARCH differs from the host (never for x86_64 on an x86_64 runner).
+# Packages are kept to the bare minimum to keep the zipped bundle under the 20 MB cap: no Xorg, no desktop, no nodejs.
 set -eEuxo pipefail
 
 ARCH="${ARCH:-x86_64}"
@@ -166,26 +166,22 @@ mount -t devtmpfs devtmpfs "$MNT/dev" || mount --bind /dev "$MNT/dev" || { echo 
 mkdir -p "$MNT/dev/pts"
 mount -t devpts devpts "$MNT/dev/pts" 2>/dev/null || true
 
-step 9 "install Alpine packages in chroot"
+step 9 "install minimal Alpine packages in chroot (no X, no desktop, no nodejs)"
 chroot "$MNT" /bin/sh -c 'apk update && apk add --no-cache \
-  alpine-base linux-lts linux-firmware-none mkinitfs grub grub-efi efibootmgr \
-  openrc xorg-server xinit xf86-video-fbdev openbox font-dejavu nodejs'
+  alpine-base linux-lts mkinitfs grub grub-efi efibootmgr'
 echo homecoffee > "$MNT/etc/hostname"
 
-step 10 "copy HomeCoffee project into image"
+step 10 "copy HomeCoffee project into image (daemon, ui, lang only)"
 mkdir -p "$MNT/opt/homecoffee"
-cp -r "$REPO/daemon" "$REPO/ui" "$REPO/lang" "$REPO/docs" "$MNT/opt/homecoffee/"
+cp -r "$REPO/daemon" "$REPO/ui" "$REPO/lang" "$MNT/opt/homecoffee/"
 
-step 11 "console config: inittab (tty1 autologin + ttyS0), GRUB console args"
+step 11 "console config: inittab (tty1 + ttyS0), GRUB console args"
 cat > "$MNT/etc/inittab" <<'INITTAB'
 # /etc/inittab for HomeCoffee (written by scripts/build-utm.sh)
 ::sysinit:/sbin/openrc sysinit
 ::sysinit:/sbin/openrc boot
 ::wait:/sbin/openrc default
-tty1::respawn:/sbin/getty -n -l /bin/sh 38400 tty1
-tty2::respawn:/sbin/getty 38400 tty2
-tty3::respawn:/sbin/getty 38400 tty3
-tty4::respawn:/sbin/getty 38400 tty4
+tty1::respawn:/sbin/getty 38400 tty1
 ttyS0::respawn:/sbin/getty -L 115200 ttyS0 vt100
 ::ctrlaltdel:/sbin/reboot
 ::shutdown:/sbin/openrc shutdown
@@ -206,7 +202,14 @@ GRUBDEF
 mkdir -p "$MNT/etc/mkinitfs"
 echo 'features="ata base ext4 scsi virtio vfat"' > "$MNT/etc/mkinitfs/mkinitfs.conf"
 
-step 12 "fstab, initramfs, GRUB EFI ($EFI_TARGET)"
+step 12 "trim rootfs to shrink the zip (docs, man pages, locales, apk cache, GPU/sound/wifi modules)"
+chroot "$MNT" /bin/sh -c 'apk cache clean 2>/dev/null; rm -rf /var/cache/apk/* /usr/share/man /usr/share/doc /usr/share/info /usr/share/groff /usr/share/bash-completion /usr/share/zoneinfo/posix /usr/share/zoneinfo/right' || true
+find "$MNT/usr/share/locale" -mindepth 1 -maxdepth 1 ! -name 'en*' -exec rm -rf {} + 2>/dev/null || true
+for d in "$MNT"/lib/modules/*/kernel/drivers/gpu "$MNT"/lib/modules/*/kernel/sound "$MNT"/lib/modules/*/kernel/drivers/media "$MNT"/lib/modules/*/kernel/drivers/net/wireless "$MNT"/lib/modules/*/kernel/net/wireless "$MNT"/lib/modules/*/kernel/drivers/bluetooth "$MNT"/lib/modules/*/kernel/net/bluetooth; do
+  [ -d "$d" ] && rm -rf "$d" || true
+done
+
+step 13 "fstab, initramfs, GRUB EFI ($EFI_TARGET)"
 cat > "$MNT/etc/fstab" <<'FSTAB'
 LABEL=ROOT  /          ext4  defaults,noatime  0 1
 LABEL=EFI   /boot/efi  vfat  defaults          0 2
@@ -220,10 +223,10 @@ chroot "$MNT" /bin/sh -c 'grub-mkconfig -o /boot/grub/grub.cfg'
 log "grub.cfg linux line:"
 grep -n 'linux ' "$MNT/boot/grub/grub.cfg" || log 'warning: no linux line in grub.cfg'
 
-step 13 "services: devfs, dmesg, bootmisc, syslog, networking, hwclock"
+step 14 "services: devfs, dmesg, bootmisc, syslog, networking, hwclock"
 chroot "$MNT" /bin/sh -c 'rc-update add devfs sysinit; rc-update add dmesg sysinit; rc-update add bootmisc boot; rc-update add syslog boot; rc-update add networking boot; rc-update add hwclock boot' || log 'warning: rc-update returned non-zero'
 
-step 14 "zero free space (compresses far better), then unmount and detach"
+step 15 "zero free space (compresses far better), then unmount and detach"
 # Fill free space with zeros so the raw image compresses well; ignore 'no space left' on the fill file.
 dd if=/dev/zero of="$MNT/zero.fill" bs=1M 2>/dev/null || true
 sync
@@ -237,7 +240,7 @@ losetup -d "$LOOP"
 LOOP=""
 trap - EXIT
 
-step 15 "assemble UTM bundle at $BUNDLE (target $UTM_TARGET, display $UTM_DISPLAY)"
+step 16 "assemble UTM bundle at $BUNDLE (target $UTM_TARGET, display $UTM_DISPLAY)"
 mkdir -p "$BUNDLE/Data"
 mv "$IMG" "$BUNDLE/Data/disk.img"
 # Keys and structure follow UTM's decoders: UTMConfigurationInfo, UTMQemuConfigurationSystem/QEMU/Input/Sharing,
@@ -343,6 +346,6 @@ cat > "$BUNDLE/config.plist" <<PLIST
 PLIST
 plutil -lint "$BUNDLE/config.plist" 2>/dev/null || python3 -c "import plistlib,sys; plistlib.load(open(sys.argv[1],'rb')); print('config.plist parses')" "$BUNDLE/config.plist"
 
-step 16 "done"
+step 17 "done"
 log "bundle ready (unzipped): $BUNDLE"
 ls -lh "$BUNDLE" "$BUNDLE/Data"
