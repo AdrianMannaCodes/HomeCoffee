@@ -30,30 +30,55 @@ esac
 log() { echo "[build-utm] $*"; }
 mkdir -p "$BUILD" "$MNT"
 
-# Resolve a usable static qemu-user binary to a real, executable ELF file.
-# Order: PATH, /usr/bin, then the multiarch standalone release.
-# Symlinks are followed (readlink -f) so the copy is the actual binary, not a dangling link.
-resolve_qemu() {
-  local name="$1" p real dest
-  for p in "$(command -v "$name" 2>/dev/null || true)" "/usr/bin/$name"; do
-    [ -n "$p" ] || continue
-    real="$(readlink -f "$p" 2>/dev/null || true)"
-    if [ -n "$real" ] && [ -f "$real" ] && [ -x "$real" ] && [ "$(head -c 4 "$real" | od -An -c | tr -d ' ')" = '177ELF' ]; then
-      echo "$real"; return 0
-    fi
-    log "ignoring $p (resolved: ${real:-none}; not a usable ELF file)"
-  done
-  log "$name not usable; downloading standalone static binary"
-  dest="$BUILD/bin/$name"
-  mkdir -p "$BUILD/bin"
-  curl -fsSL --retry 3 -o "$dest" \
-    "https://github.com/multiarch/qemu-user-static/releases/download/v7.2.0-1/$name"
-  chmod +x "$dest"
-  if [ "$(head -c 4 "$dest" | od -An -c | tr -d ' ')" != '177ELF' ]; then
-    echo "::error::downloaded $name is not an ELF binary" >&2
+# Return 0 and print the path if $1 is a real, executable ELF file (symlinks followed).
+is_usable_elf() {
+  local real
+  real="$(readlink -f "$1" 2>/dev/null || true)"
+  if [ -z "$real" ] || [ ! -f "$real" ]; then
+    log "  candidate $1: not a regular file (resolved to '${real:-nothing}')"
     return 1
   fi
-  echo "$dest"
+  if [ ! -x "$real" ]; then
+    log "  candidate $real: not executable"
+    return 1
+  fi
+  if [ "$(head -c 4 "$real" | od -An -c | tr -d ' ')" != '177ELF' ]; then
+    log "  candidate $real: not an ELF binary"
+    return 1
+  fi
+  echo "$real"
+}
+
+# Resolve a usable static qemu-user binary. Order: PATH, /usr/bin (the apt qemu-user-static
+# package on ubuntu-24.04 installs it here), then the multiarch standalone release as a last resort.
+resolve_qemu() {
+  local name="$1" cand found dest code
+  log "resolving $name"
+  for cand in "$(command -v "$name" 2>/dev/null || true)" "/usr/bin/$name"; do
+    [ -n "$cand" ] || continue
+    if found="$(is_usable_elf "$cand")"; then
+      log "found usable emulator: $found"
+      echo "$found"
+      return 0
+    fi
+  done
+  log "no usable $name installed; trying multiarch standalone download"
+  dest="$BUILD/bin/$name"
+  mkdir -p "$BUILD/bin"
+  code="$(curl -sSL --retry 3 -w '%{http_code}' -o "$dest" \
+    "https://github.com/multiarch/qemu-user-static/releases/download/v7.2.0-1/$name" || true)"
+  log "download HTTP status: ${code:-none}, size: $(stat -c %s "$dest" 2>/dev/null || echo 0) bytes"
+  if [ "${code:-}" != "200" ]; then
+    echo "::error::could not download $name (HTTP ${code:-none})" >&2
+    return 1
+  fi
+  chmod +x "$dest"
+  if found="$(is_usable_elf "$dest")"; then
+    echo "$found"
+    return 0
+  fi
+  echo "::error::downloaded $name is not a usable ELF binary" >&2
+  return 1
 }
 
 # Make sure loop device nodes exist (some runners only have loop0..7 pre-created).
@@ -116,6 +141,12 @@ if [ -n "$QEMU_BIN" ] && [ "$ARCH" != "$(uname -m)" ]; then
   mkdir -p "$MNT/usr/bin"
   cp -L "$QEMU_PATH" "$MNT/usr/bin/$QEMU_BIN"
   chmod +x "$MNT/usr/bin/$QEMU_BIN"
+  # Confirm the kernel will route foreign-arch ELF files to qemu (binfmt_misc).
+  if [ -e "/proc/sys/fs/binfmt_misc/qemu-aarch64" ]; then
+    log "binfmt_misc entry qemu-aarch64 is registered"
+  else
+    log "warning: no qemu-aarch64 binfmt_misc entry; chroot may fail with exec format error"
+  fi
 fi
 # Bind the pseudo-filesystems into the chroot. Each mount reports its own error.
 mkdir -p "$MNT/proc" "$MNT/sys" "$MNT/dev"
