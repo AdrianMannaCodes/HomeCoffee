@@ -25,7 +25,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
       ARCH: ${{ inputs.arch || 'aarch64' }}
@@ -47,12 +47,15 @@ jobs:
           apt_retry update || { echo '::error::apt-get update failed'; exit 1; }
           apt_retry install -y --no-install-recommends binfmt-support gdisk dosfstools e2fsprogs zip curl ca-certificates util-linux parted kpartx \
             || { echo '::error::apt-get install of base tools failed'; exit 1; }
+          # On ubuntu-24.04 this package provides /usr/bin/qemu-aarch64-static and registers binfmt.
           apt_retry install -y --no-install-recommends qemu-user-static \
-            || echo '::warning::qemu-user-static not available; build script will fetch the standalone binary'
+            || { echo '::error::apt-get install of qemu-user-static failed'; exit 1; }
           sudo update-binfmts --enable || true
-          command -v qemu-aarch64-static || echo 'qemu-aarch64-static not on PATH; build script will resolve it'
+          if [ "$ARCH" = aarch64 ]; then
+            [ -x /usr/bin/qemu-aarch64-static ] || { echo '::error::/usr/bin/qemu-aarch64-static missing after install'; exit 1; }
+            echo "emulator: $(ls -l /usr/bin/qemu-aarch64-static)"
+          fi
           ls /proc/sys/fs/binfmt_misc/ | grep -i -E 'qemu|aarch64' || echo 'no qemu binfmt entries listed'
-          ls -l /dev/loop* | head -3 || true
 
       - name: Build disk image and bundle
         shell: bash
