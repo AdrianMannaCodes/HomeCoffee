@@ -1,0 +1,21 @@
+{
+  "note": "16 apps from the user's list. Yezik labels are PROPOSALS pending user approval.",
+  "apps": [
+    {"id":"home","en":"Home","yezik":"Dom","desc":"Accounts, file sharing and built-in chat, authenticated with IP:PORT + 4-digit PIN"},
+    {"id":"files","en":"Files","yezik":"Fayl","desc":"File browser"},
+    {"id":"terminal","en":"Terminal","yezik":"Konsol","desc":"Shell; includes sudo staęs -e-f language switch"},
+    {"id":"editor","en":"Text Editor","yezik":"Notęs","desc":"Text editor"},
+    {"id":"calc","en":"Calculator","yezik":"Kalkulo","desc":"Calculator"},
+    {"id":"image","en":"Image Viewer","yezik":"Imaję","desc":"Image viewer with image import"},
+    {"id":"music","en":"Music","yezik":"Muzik","desc":"Audio player"},
+    {"id":"prefs","en":"System Preferences","yezik":"Setęs","desc":"System preferences"},
+    {"id":"hub","en":"Collab Hub / Chat","yezik":"Tokęs","desc":"Messaging with live collaboration"},
+    {"id":"browser","en":"Web Browser / Dictionary","yezik":"Lexo","desc":"Offline conlang dictionary reader or web browser"},
+    {"id":"glyph","en":"Font / Glyph Book","yezik":"Glifo","desc":"Yezik glyph and font book"},
+    {"id":"clock","en":"Clock / World Time","yezik":"Go","desc":"Go (time) and Gogo (day) world clock"},
+    {"id":"notes","en":"Notes / Scratchpad","yezik":"Notęs2","desc":"Scratchpad"},
+    {"id":"monitor","en":"Monitor / Task Manager","yezik":"Monito","desc":"Task manager"},
+    {"id":"installer","en":"App Installer","yezik":"Instalo","desc":"Package manager (no App Store, per spec)"},
+    {"id":"trash","en":"Trash / Archive","yezik":"Kuku-bin","desc":"Trash and archive"}
+  ]
+}

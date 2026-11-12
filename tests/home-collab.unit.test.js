@@ -1,0 +1,20 @@
+// Pure-logic tests for daemon/home-collab.js (no sockets). Run: node tests/home-collab.unit.test.js
+'use strict';
+const assert = require('assert');
+const { randomPin, pinMatches, createRoom, parseAddress, formatAddress, DEFAULT_PORT, MAX_FAILS } = require('../daemon/home-collab.js');
+assert.strictEqual(DEFAULT_PORT, 7420);
+for (let i = 0; i < 5000; i++) assert.match(randomPin(), /^\d{4}$/);
+assert.strictEqual(pinMatches('4821', '4821'), true);
+assert.strictEqual(pinMatches('4822', '4821'), false);
+assert.strictEqual(createRoom({ pin: '0007' }).pin, '0007');
+assert.strictEqual(createRoom({ pin: '0007', port: 9000 }).address('192.168.1.20'), '192.168.1.20:9000 0007');
+assert.strictEqual(formatAddress('fe80::1', 7420, '1234'), '[fe80::1]:7420 1234');
+assert.throws(() => formatAddress('10.0.0.1', 7420, '12'));
+assert.deepStrictEqual(parseAddress('192.168.1.20:7420 4821'), { host: '192.168.1.20', port: 7420, pin: '4821' });
+assert.deepStrictEqual(parseAddress('10.0.0.5:7420/0099'), { host: '10.0.0.5', port: 7420, pin: '0099' });
+assert.deepStrictEqual(parseAddress('10.0.0.5:7420'), { host: '10.0.0.5', port: 7420, pin: null });
+assert.deepStrictEqual(parseAddress('[fe80::1]:7420 1111'), { host: 'fe80::1', port: 7420, pin: '1111' });
+assert.throws(() => parseAddress('10.0.0.5'));
+assert.throws(() => parseAddress('10.0.0.5:70000 1234'));
+assert.strictEqual(MAX_FAILS, 5);
+console.log('home-collab unit tests passed');
