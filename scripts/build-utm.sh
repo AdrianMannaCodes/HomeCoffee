@@ -21,6 +21,26 @@ esac
 log() { echo "[build-utm] $*"; }
 mkdir -p "$BUILD" "$MNT"
 
+# Find a static qemu-user binary for the guest arch.
+# 1) on PATH, 2) /usr/bin, 3) download the standalone static binary from multiarch/qemu-user-static.
+resolve_qemu() {
+  local name="$1" p
+  if p="$(command -v "$name" 2>/dev/null)" && [ -n "$p" ]; then echo "$p"; return 0; fi
+  if [ -x "/usr/bin/$name" ]; then echo "/usr/bin/$name"; return 0; fi
+  log "$name not installed; downloading standalone static binary from multiarch/qemu-user-static"
+  local dest="$BUILD/bin/$name"
+  mkdir -p "$BUILD/bin"
+  curl -fsSL --retry 3 -o "$dest" \
+    "https://github.com/multiarch/qemu-user-static/releases/download/v7.2.0-1/$name"
+  chmod +x "$dest"
+  # Verify it is an ELF executable, not an HTML error page.
+  if [ "$(head -c 4 "$dest" | od -An -c | tr -d ' ')" != '177ELF' ]; then
+    echo "::error::downloaded $name is not an ELF binary" >&2
+    return 1
+  fi
+  echo "$dest"
+}
+
 # 1. Resolve the Alpine minirootfs for this arch from the official index.
 ALPINE_BASE="https://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/$ARCH"
 YAML="$BUILD/latest-releases.yaml"
@@ -51,9 +71,11 @@ mount "${LOOP}p1" "$MNT/boot/efi"
 tar -xzf "$BUILD/$MINI" -C "$MNT"
 cp /etc/resolv.conf "$MNT/etc/resolv.conf"
 if [ -n "$QEMU_BIN" ] && [ "$ARCH" != "$(uname -m)" ]; then
-  QEMU_PATH="$(command -v "$QEMU_BIN" || true)"
-  [ -n "$QEMU_PATH" ] || { echo "::error::$QEMU_BIN not found; install qemu-user-static" >&2; exit 1; }
-  cp "$QEMU_PATH" "$MNT/usr/bin/"
+  QEMU_PATH="$(resolve_qemu "$QEMU_BIN")" || { echo "::error::could not obtain $QEMU_BIN" >&2; exit 1; }
+  log "using emulator: $QEMU_PATH"
+  mkdir -p "$MNT/usr/bin"
+  cp "$QEMU_PATH" "$MNT/usr/bin/$QEMU_BIN"
+  chmod +x "$MNT/usr/bin/$QEMU_BIN"
 fi
 for d in proc sys dev; do mount --rbind "/$d" "$MNT/$d"; done
 
