@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Builds HomeCoffee.utm: an Alpine-based raw disk image (EFI + root) plus UTM config.
-# Must run as root (sudo) on a Linux host. Env: ARCH (x86_64|aarch64, default x86_64), DISK_GB (default 4).
+# Must run as root (sudo) on a Linux host. Env: ARCH (x86_64|aarch64, default x86_64), DISK_GB (default 2).
 # Output: build/HomeCoffee.utm/{config.plist,Data/disk.img} (unzipped bundle folder).
+# config.plist follows UTM's Configuration/*.swift decoders (ConfigurationVersion 4, singular Display/Drive/Network keys).
 # qemu-user emulation is only used when ARCH differs from the host (never for x86_64 on an x86_64 runner).
 set -eEuxo pipefail
 
 ARCH="${ARCH:-x86_64}"
-DISK_GB="${DISK_GB:-4}"
+DISK_GB="${DISK_GB:-2}"
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD="$REPO/build"
 BUNDLE="$BUILD/HomeCoffee.utm"
@@ -27,8 +28,8 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 case "$ARCH" in
-  x86_64)  EFI_TARGET=x86_64-efi; QEMU_BIN=""; UTM_TARGET=q35 ;;
-  aarch64) EFI_TARGET=arm64-efi; QEMU_BIN=qemu-aarch64-static; UTM_TARGET=virt ;;
+  x86_64)  EFI_TARGET=x86_64-efi; QEMU_BIN=""; UTM_TARGET=q35; UTM_DISPLAY=virtio-vga; UTM_NET=e1000; UTM_SOUND=intel-hda ;;
+  aarch64) EFI_TARGET=arm64-efi; QEMU_BIN=qemu-aarch64-static; UTM_TARGET=virt; UTM_DISPLAY=virtio-ramfb; UTM_NET=virtio-net-pci; UTM_SOUND=intel-hda ;;
   *) echo "unsupported ARCH: $ARCH" >&2; exit 1 ;;
 esac
 
@@ -219,10 +220,15 @@ chroot "$MNT" /bin/sh -c 'grub-mkconfig -o /boot/grub/grub.cfg'
 log "grub.cfg linux line:"
 grep -n 'linux ' "$MNT/boot/grub/grub.cfg" || log 'warning: no linux line in grub.cfg'
 
-step 13 "services: devfs/udev-free dev nodes, bootmisc, syslog, networking, hwclock"
+step 13 "services: devfs, dmesg, bootmisc, syslog, networking, hwclock"
 chroot "$MNT" /bin/sh -c 'rc-update add devfs sysinit; rc-update add dmesg sysinit; rc-update add bootmisc boot; rc-update add syslog boot; rc-update add networking boot; rc-update add hwclock boot' || log 'warning: rc-update returned non-zero'
 
-step 14 "unmount and detach"
+step 14 "zero free space (compresses far better), then unmount and detach"
+# Fill free space with zeros so the raw image compresses well; ignore 'no space left' on the fill file.
+dd if=/dev/zero of="$MNT/zero.fill" bs=1M 2>/dev/null || true
+sync
+rm -f "$MNT/zero.fill"
+sync
 for d in dev/pts dev sys proc; do umount "$MNT/$d" 2>/dev/null || true; done
 umount "$MNT/boot/efi"
 umount "$MNT"
@@ -231,9 +237,11 @@ losetup -d "$LOOP"
 LOOP=""
 trap - EXIT
 
-step 15 "assemble unzipped UTM bundle at $BUNDLE (target $UTM_TARGET)"
+step 15 "assemble UTM bundle at $BUNDLE (target $UTM_TARGET, display $UTM_DISPLAY)"
 mkdir -p "$BUNDLE/Data"
 mv "$IMG" "$BUNDLE/Data/disk.img"
+# Keys and structure follow UTM's decoders: UTMConfigurationInfo, UTMQemuConfigurationSystem/QEMU/Input/Sharing,
+# UTMQemuConfigurationDisplay/Drive/Network/Serial/Sound. Every key UTM decodes without a default is written.
 cat > "$BUNDLE/config.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -241,53 +249,99 @@ cat > "$BUNDLE/config.plist" <<PLIST
 <dict>
   <key>ConfigurationVersion</key><integer>4</integer>
   <key>Backend</key><string>QEMU</string>
-  <key>Information</key><dict>
+  <key>Information</key>
+  <dict>
     <key>Name</key><string>HomeCoffee</string>
     <key>UUID</key><string>6F1C2A9E-3B7D-4E21-9C55-52ED5A0A1234</string>
     <key>IconCustom</key><false/>
   </dict>
-  <key>System</key><dict>
+  <key>System</key>
+  <dict>
     <key>Architecture</key><string>$ARCH</string>
     <key>Target</key><string>$UTM_TARGET</string>
     <key>CPU</key><string>default</string>
+    <key>CPUFlagsAdd</key><array/>
+    <key>CPUFlagsRemove</key><array/>
     <key>CPUCount</key><integer>2</integer>
+    <key>ForceMulticore</key><false/>
     <key>MemorySize</key><integer>512</integer>
-    <key>JITSizeMB</key><integer>0</integer>
+    <key>JITCacheSize</key><integer>0</integer>
+  </dict>
+  <key>QEMU</key>
+  <dict>
+    <key>DebugLog</key><false/>
     <key>UEFIBoot</key><true/>
-    <key>HardwareAcceleration</key><false/>
-  </dict>
-  <key>QEMU</key><dict>
-    <key>TPM</key><false/>
-    <key>UsbBusSupport</key><false/>
     <key>RNGDevice</key><true/>
+    <key>BalloonDevice</key><false/>
+    <key>TPMDevice</key><false/>
+    <key>Hypervisor</key><false/>
+    <key>TSO</key><false/>
+    <key>RTCLocalTime</key><false/>
+    <key>PS2Controller</key><false/>
+    <key>InterruptRemapping</key><true/>
+    <key>MemoryLock</key><true/>
+    <key>AdditionalArguments</key><array/>
   </dict>
-  <key>Drives</key><array>
+  <key>Input</key>
+  <dict>
+    <key>UsbBusSupport</key><string>3.0</string>
+    <key>UsbSharing</key><false/>
+    <key>MaximumUsbShare</key><integer>3</integer>
+  </dict>
+  <key>Sharing</key>
+  <dict>
+    <key>DirectoryShareMode</key><string>None</string>
+    <key>DirectoryShareReadOnly</key><false/>
+    <key>ClipboardSharing</key><false/>
+  </dict>
+  <key>Drive</key>
+  <array>
     <dict>
-      <key>ImageType</key><string>disk</string>
-      <key>Interface</key><string>virtio</string>
-      <key>ImagePath</key><string>disk.img</string>
+      <key>ImageName</key><string>disk.img</string>
+      <key>ImageType</key><string>Disk</string>
+      <key>Interface</key><string>VirtIO</string>
+      <key>InterfaceVersion</key><integer>1</integer>
+      <key>Identifier</key><string>6F1C2A9E-0000-4E21-9C55-000000000001</string>
       <key>ReadOnly</key><false/>
     </dict>
   </array>
-  <key>Networks</key><array>
+  <key>Display</key>
+  <array>
     <dict>
-      <key>Mode</key><string>shared</string>
-      <key>Hardware</key><string>virtio-net-pci</string>
-    </dict>
-  </array>
-  <key>Displays</key><array>
-    <dict>
-      <key>Hardware</key><string>virtio-ramfb</string>
+      <key>Hardware</key><string>$UTM_DISPLAY</string>
       <key>DynamicResolution</key><true/>
-      <key>Hidpi</key><false/>
+      <key>UpscalingFilter</key><string>Linear</string>
+      <key>DownscalingFilter</key><string>Linear</string>
+      <key>NativeResolution</key><false/>
     </dict>
   </array>
-  <key>Sound</key><array>
-    <dict><key>Hardware</key><string>intel-hda</string></dict>
+  <key>Network</key>
+  <array>
+    <dict>
+      <key>Mode</key><string>Emulated</string>
+      <key>Hardware</key><string>$UTM_NET</string>
+      <key>MacAddress</key><string>52:54:00:12:34:56</string>
+      <key>IsolateFromHost</key><false/>
+      <key>PortForward</key><array/>
+    </dict>
+  </array>
+  <key>Serial</key>
+  <array>
+    <dict>
+      <key>Mode</key><string>Terminal</string>
+      <key>Target</key><string>Auto</string>
+    </dict>
+  </array>
+  <key>Sound</key>
+  <array>
+    <dict>
+      <key>Hardware</key><string>$UTM_SOUND</string>
+    </dict>
   </array>
 </dict>
 </plist>
 PLIST
+plutil -lint "$BUNDLE/config.plist" 2>/dev/null || python3 -c "import plistlib,sys; plistlib.load(open(sys.argv[1],'rb')); print('config.plist parses')" "$BUNDLE/config.plist"
 
 step 16 "done"
 log "bundle ready (unzipped): $BUNDLE"
