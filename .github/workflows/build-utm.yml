@@ -49,7 +49,7 @@ jobs:
           echo "[workflow] apt-get update"
           apt_retry update || { echo '::error::apt-get update failed'; exit 1; }
           echo "[workflow] installing disk/filesystem tools"
-          apt_retry install -y --no-install-recommends gdisk dosfstools e2fsprogs util-linux parted kpartx curl ca-certificates zip \
+          apt_retry install -y --no-install-recommends gdisk dosfstools e2fsprogs util-linux parted kpartx curl ca-certificates \
             || { echo '::error::apt-get install of base tools failed'; exit 1; }
           if [ "$ARCH" = aarch64 ]; then
             echo "[workflow] aarch64 requested: installing qemu-user-static for emulation"
@@ -84,7 +84,7 @@ jobs:
           echo "=== TAIL OF BUILD LOG ==="
           tail -n 150 build.log || true
 
-      - name: Step 5 - verify bundle and zip it
+      - name: Step 5 - verify bundle
         shell: bash
         run: |
           set -e
@@ -92,16 +92,49 @@ jobs:
           test -f build/HomeCoffee.utm/config.plist
           test -f build/HomeCoffee.utm/Data/disk.img
           ls -lh build/HomeCoffee.utm build/HomeCoffee.utm/Data
+          grep -E 'Target|Architecture|Displays|virtio-ramfb' build/HomeCoffee.utm/config.plist
+          echo "[workflow] bundle verified"
+
+      - name: Step 6 - package HomeCoffee-x86_64.utm.zip
+        shell: bash
+        run: |
+          set -e
+          # build/ is root-owned after the sudo build; give the runner user ownership before writing the zip.
+          sudo chown -R "$(id -u):$(id -g)" build
           cd build
           ZIP="HomeCoffee-${ARCH}.utm.zip"
           rm -f "$ZIP" "$ZIP.sha256"
-          echo "[workflow] zipping $ZIP"
-          zip -r -q "$ZIP" HomeCoffee.utm
+          echo "[workflow] packaging $ZIP with python zipfile"
+          python3 - "$ZIP" <<'PY'
+          import os, sys, zipfile
+          out = sys.argv[1]
+          with zipfile.ZipFile(out, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=6) as z:
+              for root, _dirs, files in os.walk('HomeCoffee.utm'):
+                  for f in files:
+                      p = os.path.join(root, f)
+                      z.write(p, p)
+          with zipfile.ZipFile(out) as z:
+              names = z.namelist()
+              print('entries:', names)
+              assert 'HomeCoffee.utm/config.plist' in names, 'config.plist missing from zip'
+              assert 'HomeCoffee.utm/Data/disk.img' in names, 'disk.img missing from zip'
+          PY
           sha256sum "$ZIP" > "$ZIP.sha256"
           ls -lh "$ZIP" "$ZIP.sha256"
+          cat "$ZIP.sha256"
           echo "[workflow] zip created"
 
-      - name: Step 6 - publish to rolling GitHub Release
+      - name: Step 7 - upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HomeCoffee-${{ env.ARCH }}.utm.zip
+          path: |
+            build/HomeCoffee-${{ env.ARCH }}.utm.zip
+            build/HomeCoffee-${{ env.ARCH }}.utm.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Step 8 - publish to nightly GitHub Release
         if: success()
         uses: softprops/action-gh-release@v2
         with:
@@ -113,12 +146,13 @@ jobs:
           body: |
             Automated build from commit ${{ github.sha }} (${{ github.ref_name }}).
             Download HomeCoffee-${{ env.ARCH }}.utm.zip, unzip it, and open HomeCoffee.utm in UTM.
+            Settings: Q35, x86_64, UEFI, 512 MB RAM, 2 cores, virtio-ramfb display.
             This is a development build.
           files: |
             build/HomeCoffee-${{ env.ARCH }}.utm.zip
             build/HomeCoffee-${{ env.ARCH }}.utm.zip.sha256
 
-      - name: Step 7 - upload build log on failure
+      - name: Step 9 - upload build log on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
