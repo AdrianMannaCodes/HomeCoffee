@@ -45,26 +45,29 @@ jobs:
             return 1
           }
           apt_retry update || { echo '::error::apt-get update failed'; exit 1; }
-          # Required everywhere: disk and filesystem tools, binfmt-support for binfmt registration.
-          apt_retry install -y --no-install-recommends binfmt-support gdisk dosfstools e2fsprogs zip curl ca-certificates \
+          apt_retry install -y --no-install-recommends binfmt-support gdisk dosfstools e2fsprogs zip curl ca-certificates util-linux parted \
             || { echo '::error::apt-get install of base tools failed'; exit 1; }
-          # qemu-user-static is not on every Ubuntu release; try it, but do not fail if absent.
-          # The build script falls back to downloading the standalone static binary.
-          if apt_retry install -y --no-install-recommends qemu-user-static; then
-            echo 'installed qemu-user-static'
-          else
-            echo '::warning::qemu-user-static not available on this image; build script will use the standalone binary'
-          fi
-          # qemu-user-binfmt provides the binfmt config files; install it if available.
-          apt_retry install -y --no-install-recommends qemu-user-binfmt || echo '::warning::qemu-user-binfmt not available'
-          # Register binfmt handlers and report what is present.
+          apt_retry install -y --no-install-recommends qemu-user-static \
+            || echo '::warning::qemu-user-static not available; build script will fetch the standalone binary'
           sudo update-binfmts --enable || true
-          sudo systemctl restart binfmt-support || true
-          command -v qemu-aarch64-static || command -v qemu-aarch64 || echo 'qemu-aarch64-static not on PATH yet; the build script will fetch it'
+          command -v qemu-aarch64-static || echo 'qemu-aarch64-static not on PATH; build script will resolve it'
           ls /proc/sys/fs/binfmt_misc/ | grep -i -E 'qemu|aarch64' || echo 'no qemu binfmt entries listed'
+          ls -l /dev/loop* | head -3 || true
 
       - name: Build disk image and bundle
-        run: sudo -E ARCH="$ARCH" DISK_GB="$DISK_GB" bash scripts/build-utm.sh
+        shell: bash
+        run: |
+          # Run as root explicitly. The script is invoked via bash, so it does not need the executable bit.
+          set -o pipefail
+          sudo -E ARCH="$ARCH" DISK_GB="$DISK_GB" bash scripts/build-utm.sh 2>&1 | tee build-utm.log
+          rc=${PIPESTATUS[0]}
+          if [ "$rc" -ne 0 ]; then
+            echo '::group::Last 150 lines of build output'
+            tail -n 150 build-utm.log
+            echo '::endgroup::'
+            echo "::error::build-utm.sh exited with $rc"
+          fi
+          exit "$rc"
 
       - name: Zip bundle
         run: |
@@ -81,6 +84,14 @@ jobs:
             build/HomeCoffee.utm.zip
             build/HomeCoffee.utm.zip.sha256
           retention-days: 14
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ env.ARCH }}
+          path: build-utm.log
+          retention-days: 7
 
       - name: Publish tagged release
         if: startsWith(github.ref, 'refs/tags/v')
