@@ -88,18 +88,18 @@ jobs:
         shell: bash
         run: |
           set -e
-          echo "[workflow] bundle contents:"
-          find build/HomeCoffee.utm -maxdepth 2 -exec ls -ld {} \;
+          echo "[workflow] verifying bundle"
           test -f build/HomeCoffee.utm/config.plist
           test -f build/HomeCoffee.utm/Data/disk.img
+          ls -lh build/HomeCoffee.utm build/HomeCoffee.utm/Data
           cd build
           ZIP="HomeCoffee-${ARCH}.utm.zip"
           rm -f "$ZIP" "$ZIP.sha256"
+          echo "[workflow] zipping $ZIP"
           zip -r -q "$ZIP" HomeCoffee.utm
           sha256sum "$ZIP" > "$ZIP.sha256"
-          echo "[workflow] created $ZIP:"
           ls -lh "$ZIP" "$ZIP.sha256"
-          unzip -l "$ZIP" | tail -n 5
+          echo "[workflow] zip created"
 
       - name: Step 6 - publish to rolling GitHub Release
         if: success()
