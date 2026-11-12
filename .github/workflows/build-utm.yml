@@ -33,12 +33,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install host tools (QEMU user emulation for chroot, image tools)
+      - name: Install host tools
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y qemu-user-static binfmt-support gdisk dosfstools e2fsprogs zip
-          sudo systemctl restart binfmt-support || true
-          ls /proc/sys/fs/binfmt_misc/ | grep -i qemu || true
+          set -uo pipefail
+          apt_retry() {
+            for i in 1 2 3; do
+              sudo apt-get -o Acquire::Retries=3 "$@" && return 0
+              echo "apt-get $* failed (attempt $i), retrying in 10s"; sleep 10
+            done
+            return 1
+          }
+          apt_retry update || { echo '::error::apt-get update failed'; exit 1; }
+          # qemu-user-static registers its own binfmt handlers; binfmt-support is not required.
+          apt_retry install -y --no-install-recommends qemu-user-static gdisk dosfstools e2fsprogs zip curl ca-certificates \
+            || { echo '::error::apt-get install failed; see the lines above'; apt-cache policy qemu-user-static gdisk dosfstools e2fsprogs zip | head -40; exit 1; }
+          ls /proc/sys/fs/binfmt_misc/ | grep -i qemu || echo 'no qemu binfmt entries yet (registered on first use)'
 
       - name: Build disk image and bundle
         run: sudo -E ARCH="$ARCH" DISK_GB="$DISK_GB" bash scripts/build-utm.sh
