@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Home</title>
+<link rel="stylesheet" href="../aqua/aqua.css">
+</head>
+<body>
+<div id="stage">
+  <div id="menubar"><span class="apple-mark">&#9733;</span><span>Home</span><span class="clock" id="clock"></span></div>
+  <section class="window" style="left:40px;top:50px;width:620px;height:460px;" id="home-window">
+    <div class="titlebar">
+      <div class="lights"><span class="light close"></span><span class="light minimize"></span><span class="light zoom"></span></div>
+      <div class="title" data-i18n="home.title">Home</div>
+    </div>
+    <div class="window-body">
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;">
+        <div class="tabs" role="tablist">
+          <button role="tab" id="tab-host" aria-selected="false" data-i18n="home.host">Host</button>
+          <button role="tab" id="tab-join" aria-selected="true" data-i18n="home.join">Join</button>
+        </div>
+        <span style="margin-left:auto;font-size:12px;" id="account-label"></span>
+        <button class="aqua-btn secondary" id="switch-account" data-i18n="home.switchAccount">Switch account</button>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+        <input class="aqua-field" id="address" placeholder="192.168.1.20:7420" style="flex:1" aria-label="Address">
+        <input class="aqua-field" id="pin" placeholder="PIN" maxlength="4" inputmode="numeric" style="width:80px" aria-label="PIN">
+        <button class="aqua-btn" id="connect">Connect</button>
+      </div>
+      <div id="status" style="font-size:12px;margin-bottom:8px;"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div><strong data-i18n="home.peers">Active peers</strong><ul id="peers" style="margin:4px 0;padding-left:18px;"></ul></div>
+        <div><strong data-i18n="home.files">Shared files</strong><ul id="files" style="margin:4px 0;padding-left:18px;"></ul></div>
+      </div>
+    </div>
+  </section>
+  <section class="window" style="left:690px;top:50px;width:300px;height:460px;" id="chat-window">
+    <div class="titlebar">
+      <div class="lights"><span class="light close"></span><span class="light minimize"></span><span class="light zoom"></span></div>
+      <div class="title" data-i18n="home.chat">Chat</div>
+    </div>
+    <div class="window-body" style="display:flex;flex-direction:column;">
+      <div id="messages" style="flex:1;overflow:auto;font-size:13px;"></div>
+      <div style="display:flex;gap:6px;margin-top:8px;">
+        <input class="aqua-field" id="chat-input" style="flex:1" aria-label="Message">
+        <button class="aqua-btn" id="chat-send" data-i18n="home.send">Send</button>
+      </div>
+    </div>
+  </section>
+  <div id="dock"><div class="dock-item home">Home</div><div class="dock-item">Files</div><div class="dock-item">Notes</div></div>
+</div>
+<script src="../aqua/display.js"></script>
+<script src="../aqua/desktop.js"></script>
+<script src="room.js"></script>
+<script src="home.js"></script>
+</body>
+</html>

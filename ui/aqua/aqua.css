@@ -1,0 +1,82 @@
+/* Aqua / Mac OS X 10.4 Tiger-style desktop theme for Red Star OS 3.0 (HomeCoffee).
+   Original styling inspired by the Tiger look: brushed metal frames, aqua pill buttons, traffic lights, top menubar.
+   No Apple artwork is used. */
+:root {
+  --menubar-h: 22px;
+  --metal-light: #e9ecf1;
+  --metal-mid: #c9ced8;
+  --metal-dark: #8e97a6;
+  --aqua-blue: #3d8bfd;
+  --aqua-glow: #9ec9ff;
+  --red-star: #c8102e;
+  --ink: #1d2430;
+  --font-ui: "Lucida Grande", "Helvetica Neue", Arial, sans-serif;
+  --display-scale: 1;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; font-family: var(--font-ui); color: var(--ink); }
+body {
+  background: radial-gradient(ellipse at 30% 20%, #6ea0d8 0%, #2d5b93 60%, #13294a 100%);
+  cursor: url("cursors/arrow.svg") 1 1, default;
+}
+#stage { position: absolute; left: 0; top: 0; width: 1024px; height: 768px; transform-origin: 0 0; transform: scale(var(--display-scale)); }
+
+#menubar {
+  position: absolute; left: 0; right: 0; top: 0; height: var(--menubar-h);
+  background: linear-gradient(#f4f6fa, #d6dbe4 60%, #bfc6d2);
+  border-bottom: 1px solid #7e8797; display: flex; align-items: center; padding: 0 10px; gap: 14px;
+  font-size: 12px; font-weight: 700; z-index: 1000;
+}
+#menubar .apple-mark { color: var(--red-star); font-weight: 900; }
+#menubar .clock { margin-left: auto; font-weight: 400; }
+
+.window {
+  position: absolute; min-width: 320px; min-height: 200px; display: flex; flex-direction: column;
+  background: linear-gradient(#f2f4f8, #d9dee7);
+  border: 1px solid #5c6578; border-radius: 9px 9px 6px 6px;
+  box-shadow: 0 10px 26px rgba(0,0,0,.45), inset 0 1px 0 #fff;
+  overflow: hidden;
+}
+.window.inactive { filter: saturate(.55); opacity: .92; }
+.titlebar {
+  height: 30px; flex: 0 0 30px; display: flex; align-items: center; gap: 8px; padding: 0 10px;
+  background: repeating-linear-gradient(90deg, rgba(255,255,255,.12) 0 1px, transparent 1px 3px), linear-gradient(#eef1f6, #aab3c3);
+  border-bottom: 1px solid #6b7486; font-size: 13px; font-weight: 700; cursor: default;
+}
+.titlebar .title { flex: 1; text-align: center; text-shadow: 0 1px 0 #fff; }
+.lights { display: flex; gap: 7px; }
+.light { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,.35); box-shadow: inset 0 1px 2px rgba(255,255,255,.7); }
+.light.close { background: radial-gradient(circle at 35% 30%, #ffd1cc, #e0392b 60%, #9b1d13); }
+.light.minimize { background: radial-gradient(circle at 35% 30%, #fff3c4, #f0b429 60%, #a8760c); }
+.light.zoom { background: radial-gradient(circle at 35% 30%, #d6f7c9, #3fb83f 60%, #237a23); }
+.window-body { flex: 1; overflow: auto; padding: 10px; background: #fbfcfe; }
+
+.aqua-btn {
+  font: inherit; font-size: 13px; font-weight: 700; color: #fff; text-shadow: 0 -1px 0 rgba(0,0,0,.35);
+  padding: 5px 16px; border-radius: 999px; cursor: pointer;
+  border: 1px solid #1f5fb5;
+  background: linear-gradient(#b9dcff 0%, #5aa6fb 48%, #2f7be0 52%, #5ea9f7 100%);
+  box-shadow: 0 1px 2px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.7);
+}
+.aqua-btn:hover { filter: brightness(1.06); }
+.aqua-btn:active { background: linear-gradient(#2f7be0, #5aa6fb); }
+.aqua-btn[disabled] { opacity: .5; cursor: default; }
+.aqua-btn.secondary { color: var(--ink); text-shadow: none; border-color: #7a8396;
+  background: linear-gradient(#ffffff, #e2e7ef 50%, #cfd6e2 52%, #e9edf4); }
+.aqua-field {
+  font: inherit; font-size: 13px; padding: 4px 8px; border-radius: 6px; border: 1px solid #7b8698;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.2); background: #fff; color: var(--ink);
+}
+.aqua-field:focus { outline: 2px solid var(--aqua-glow); outline-offset: 0; }
+
+.tabs { display: inline-flex; border: 1px solid #5f6a80; border-radius: 999px; overflow: hidden; }
+.tabs button { font: inherit; font-size: 12px; font-weight: 700; padding: 4px 14px; border: 0; background: linear-gradient(#fff, #d5dbe6); cursor: pointer; }
+.tabs button[aria-selected="true"] { background: linear-gradient(#b9dcff, #2f7be0); color: #fff; }
+
+#dock {
+  position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 10px; padding: 8px 14px; border-radius: 18px;
+  background: rgba(255,255,255,.28); border: 1px solid rgba(255,255,255,.5); backdrop-filter: blur(6px);
+}
+.dock-item { width: 48px; height: 48px; border-radius: 12px; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,.4); background: linear-gradient(#8fb6e8, #3c6fb3); box-shadow: 0 2px 4px rgba(0,0,0,.4); }
+.dock-item.home { background: linear-gradient(#ffb3a8, #c8102e); }

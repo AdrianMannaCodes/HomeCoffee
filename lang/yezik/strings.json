@@ -1,0 +1,17 @@
+{
+  "_note": "Yezik UI strings. Only confirmed or previously proposed terms are used (Dom, Kofi, Tokes, Fayl). Everything else falls back to English until the user supplies the morpheme table. No r, ä, ö, ž, ç.",
+  "en": {
+    "home.title": "Home", "home.accounts": "Accounts", "home.collab": "Collab", "home.chat": "Chat",
+    "home.host": "Host", "home.join": "Join", "home.address": "Address (IP:PORT)", "home.pin": "PIN (4 digits)",
+    "home.connect": "Connect", "home.disconnect": "Disconnect", "home.peers": "Active peers", "home.files": "Shared files",
+    "home.send": "Send", "home.switchAccount": "Switch account", "home.newAccount": "New account",
+    "home.badAddress": "Enter IP:PORT and a 4-digit PIN.", "home.noPeers": "No peers yet.", "home.noFiles": "No shared files."
+  },
+  "yezik": {
+    "home.title": "Dom", "home.accounts": "Accounts", "home.collab": "Collab", "home.chat": "Tokęs",
+    "home.host": "Host", "home.join": "Join", "home.address": "Address (IP:PORT)", "home.pin": "PIN (4 digits)",
+    "home.connect": "Connect", "home.disconnect": "Disconnect", "home.peers": "Active peers", "home.files": "Shared files",
+    "home.send": "Send", "home.switchAccount": "Switch account", "home.newAccount": "New account",
+    "home.badAddress": "Enter IP:PORT and a 4-digit PIN.", "home.noPeers": "No peers yet.", "home.noFiles": "No shared files."
+  }
+}
