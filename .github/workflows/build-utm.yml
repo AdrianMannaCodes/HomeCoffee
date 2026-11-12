@@ -45,9 +45,9 @@ jobs:
             return 1
           }
           apt_retry update || { echo '::error::apt-get update failed'; exit 1; }
-          # qemu-user-static registers its own binfmt handlers; binfmt-support is not required.
-          apt_retry install -y --no-install-recommends qemu-user-static gdisk dosfstools e2fsprogs zip curl ca-certificates \
-            || { echo '::error::apt-get install failed; see the lines above'; apt-cache policy qemu-user-static gdisk dosfstools e2fsprogs zip | head -40; exit 1; }
+          # Ubuntu 26 (resolute) ships the qemu-user binaries in qemu-user-binfmt; qemu-user-static no longer exists.
+          apt_retry install -y --no-install-recommends qemu-user-binfmt gdisk dosfstools e2fsprogs zip curl ca-certificates \
+            || { echo '::error::apt-get install failed; see the lines above'; apt-cache policy qemu-user-binfmt gdisk dosfstools e2fsprogs zip | head -40; exit 1; }
           ls /proc/sys/fs/binfmt_misc/ | grep -i qemu || echo 'no qemu binfmt entries yet (registered on first use)'
 
       - name: Build disk image and bundle
