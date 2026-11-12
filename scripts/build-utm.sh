@@ -27,8 +27,8 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 case "$ARCH" in
-  x86_64)  EFI_TARGET=x86_64-efi; QEMU_BIN="" ;;
-  aarch64) EFI_TARGET=arm64-efi; QEMU_BIN=qemu-aarch64-static ;;
+  x86_64)  EFI_TARGET=x86_64-efi; QEMU_BIN=""; UTM_TARGET=q35 ;;
+  aarch64) EFI_TARGET=arm64-efi; QEMU_BIN=qemu-aarch64-static; UTM_TARGET=virt ;;
   *) echo "unsupported ARCH: $ARCH" >&2; exit 1 ;;
 esac
 
@@ -175,7 +175,37 @@ step 10 "copy HomeCoffee project into image"
 mkdir -p "$MNT/opt/homecoffee"
 cp -r "$REPO/daemon" "$REPO/ui" "$REPO/lang" "$REPO/docs" "$MNT/opt/homecoffee/"
 
-step 11 "fstab, initramfs, GRUB EFI ($EFI_TARGET)"
+step 11 "console config: inittab (tty1 autologin + ttyS0), GRUB console args"
+cat > "$MNT/etc/inittab" <<'INITTAB'
+# /etc/inittab for HomeCoffee (written by scripts/build-utm.sh)
+::sysinit:/sbin/openrc sysinit
+::sysinit:/sbin/openrc boot
+::wait:/sbin/openrc default
+tty1::respawn:/sbin/getty -n -l /bin/sh 38400 tty1
+tty2::respawn:/sbin/getty 38400 tty2
+tty3::respawn:/sbin/getty 38400 tty3
+tty4::respawn:/sbin/getty 38400 tty4
+ttyS0::respawn:/sbin/getty -L 115200 ttyS0 vt100
+::ctrlaltdel:/sbin/reboot
+::shutdown:/sbin/openrc shutdown
+INITTAB
+
+cat > "$MNT/etc/default/grub" <<'GRUBDEF'
+GRUB_DEFAULT=0
+GRUB_TIMEOUT=2
+GRUB_DISTRIBUTOR="HomeCoffee"
+GRUB_CMDLINE_LINUX_DEFAULT="console=tty0 console=ttyS0,115200 quiet"
+GRUB_CMDLINE_LINUX=""
+GRUB_TERMINAL="console serial"
+GRUB_SERIAL_COMMAND="serial --unit=0 --speed=115200"
+GRUB_DISABLE_OS_PROBER=true
+GRUBDEF
+
+# mkinitfs must include virtio block + ext4 so the root partition is found under UTM's virtio disk.
+mkdir -p "$MNT/etc/mkinitfs"
+echo 'features="ata base ext4 scsi virtio vfat"' > "$MNT/etc/mkinitfs/mkinitfs.conf"
+
+step 12 "fstab, initramfs, GRUB EFI ($EFI_TARGET)"
 cat > "$MNT/etc/fstab" <<'FSTAB'
 LABEL=ROOT  /          ext4  defaults,noatime  0 1
 LABEL=EFI   /boot/efi  vfat  defaults          0 2
@@ -186,11 +216,13 @@ log "kernel version: $KVER"
 chroot "$MNT" /bin/sh -c "mkinitfs -o /boot/initramfs-lts $KVER"
 chroot "$MNT" /bin/sh -c "grub-install --target=$EFI_TARGET --efi-directory=/boot/efi --removable --no-nvram"
 chroot "$MNT" /bin/sh -c 'grub-mkconfig -o /boot/grub/grub.cfg'
+log "grub.cfg linux line:"
+grep -n 'linux ' "$MNT/boot/grub/grub.cfg" || log 'warning: no linux line in grub.cfg'
 
-step 12 "enable base services"
-chroot "$MNT" /bin/sh -c 'rc-update add devfs sysinit; rc-update add networking boot; rc-update add hwclock boot' || log 'warning: rc-update returned non-zero'
+step 13 "services: devfs/udev-free dev nodes, bootmisc, syslog, networking, hwclock"
+chroot "$MNT" /bin/sh -c 'rc-update add devfs sysinit; rc-update add dmesg sysinit; rc-update add bootmisc boot; rc-update add syslog boot; rc-update add networking boot; rc-update add hwclock boot' || log 'warning: rc-update returned non-zero'
 
-step 13 "unmount and detach"
+step 14 "unmount and detach"
 for d in dev/pts dev sys proc; do umount "$MNT/$d" 2>/dev/null || true; done
 umount "$MNT/boot/efi"
 umount "$MNT"
@@ -199,17 +231,64 @@ losetup -d "$LOOP"
 LOOP=""
 trap - EXIT
 
-step 14 "assemble unzipped UTM bundle at $BUNDLE"
+step 15 "assemble unzipped UTM bundle at $BUNDLE (target $UTM_TARGET)"
 mkdir -p "$BUNDLE/Data"
 mv "$IMG" "$BUNDLE/Data/disk.img"
 cat > "$BUNDLE/config.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-<dict><key>ConfigurationVersion</key><integer>4</integer><key>Backend</key><string>QEMU</string><key>Information</key><dict><key>Name</key><string>Red Star OS 3.0 (Aqua)</string><key>UUID</key><string>6F1C2A9E-3B7D-4E21-9C55-52ED5A0A1234</string><key>IconCustom</key><false/></dict><key>System</key><dict><key>Architecture</key><string>$ARCH</string><key>Target</key><string>virt</string><key>CPU</key><string>default</string><key>CPUCount</key><integer>2</integer><key>MemorySize</key><integer>512</integer><key>JITSizeMB</key><integer>0</integer><key>UEFIBoot</key><true/><key>HardwareAcceleration</key><false/></dict><key>QEMU</key><dict><key>TPM</key><false/><key>UsbBusSupport</key><false/><key>RNGDevice</key><true/></dict><key>Drives</key><array><dict><key>ImageType</key><string>disk</string><key>Interface</key><string>virtio</string><key>ImagePath</key><string>disk.img</string><key>ReadOnly</key><false/></dict></array><key>Networks</key><array><dict><key>Mode</key><string>shared</string><key>Hardware</key><string>virtio-net-pci</string></dict></array><key>Displays</key><array><dict><key>Hardware</key><string>virtio-gpu-pci</string><key>DynamicResolution</key><true/><key>Hidpi</key><false/></dict></array><key>Sound</key><array><dict><key>Hardware</key><string>intel-hda</string></dict></array></dict>
+<dict>
+  <key>ConfigurationVersion</key><integer>4</integer>
+  <key>Backend</key><string>QEMU</string>
+  <key>Information</key><dict>
+    <key>Name</key><string>HomeCoffee</string>
+    <key>UUID</key><string>6F1C2A9E-3B7D-4E21-9C55-52ED5A0A1234</string>
+    <key>IconCustom</key><false/>
+  </dict>
+  <key>System</key><dict>
+    <key>Architecture</key><string>$ARCH</string>
+    <key>Target</key><string>$UTM_TARGET</string>
+    <key>CPU</key><string>default</string>
+    <key>CPUCount</key><integer>2</integer>
+    <key>MemorySize</key><integer>512</integer>
+    <key>JITSizeMB</key><integer>0</integer>
+    <key>UEFIBoot</key><true/>
+    <key>HardwareAcceleration</key><false/>
+  </dict>
+  <key>QEMU</key><dict>
+    <key>TPM</key><false/>
+    <key>UsbBusSupport</key><false/>
+    <key>RNGDevice</key><true/>
+  </dict>
+  <key>Drives</key><array>
+    <dict>
+      <key>ImageType</key><string>disk</string>
+      <key>Interface</key><string>virtio</string>
+      <key>ImagePath</key><string>disk.img</string>
+      <key>ReadOnly</key><false/>
+    </dict>
+  </array>
+  <key>Networks</key><array>
+    <dict>
+      <key>Mode</key><string>shared</string>
+      <key>Hardware</key><string>virtio-net-pci</string>
+    </dict>
+  </array>
+  <key>Displays</key><array>
+    <dict>
+      <key>Hardware</key><string>virtio-ramfb</string>
+      <key>DynamicResolution</key><true/>
+      <key>Hidpi</key><false/>
+    </dict>
+  </array>
+  <key>Sound</key><array>
+    <dict><key>Hardware</key><string>intel-hda</string></dict>
+  </array>
+</dict>
 </plist>
 PLIST
 
-step 15 "done"
+step 16 "done"
 log "bundle ready (unzipped): $BUNDLE"
 ls -lh "$BUNDLE" "$BUNDLE/Data"
