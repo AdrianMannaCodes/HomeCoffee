@@ -3,14 +3,13 @@ name: Build HomeCoffee.utm
 on:
   push:
     branches: [main]
-    tags: ['v*']
   workflow_dispatch:
     inputs:
       arch:
         description: 'Guest architecture'
         type: choice
-        options: [aarch64, x86_64]
-        default: aarch64
+        options: [x86_64, aarch64]
+        default: x86_64
       disk_size_gb:
         description: 'Raw disk size (GB)'
         type: string
@@ -21,48 +20,55 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
-      ARCH: ${{ inputs.arch || 'aarch64' }}
+      ARCH: ${{ inputs.arch || 'x86_64' }}
       DISK_GB: ${{ inputs.disk_size_gb || '4' }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Step 1 - checkout
+        uses: actions/checkout@v4
 
-      - name: Install host tools and qemu-user emulation
+      - name: Step 2 - install host tools
         shell: bash
         run: |
           set -uo pipefail
+          echo "[workflow] arch=$ARCH disk=${DISK_GB}G host=$(uname -m)"
           apt_retry() {
             for i in 1 2 3; do
               sudo apt-get -o Acquire::Retries=3 "$@" && return 0
-              echo "apt-get $* failed (attempt $i), retrying in 10s"; sleep 10
+              echo "[workflow] apt-get $* failed (attempt $i), retrying in 10s"; sleep 10
             done
             return 1
           }
+          echo "[workflow] apt-get update"
           apt_retry update || { echo '::error::apt-get update failed'; exit 1; }
-          apt_retry install -y --no-install-recommends binfmt-support gdisk dosfstools e2fsprogs zip curl ca-certificates util-linux parted kpartx \
+          echo "[workflow] installing disk/filesystem tools"
+          apt_retry install -y --no-install-recommends gdisk dosfstools e2fsprogs util-linux parted kpartx curl ca-certificates \
             || { echo '::error::apt-get install of base tools failed'; exit 1; }
-          # On ubuntu-24.04 this package provides /usr/bin/qemu-aarch64-static and registers binfmt.
-          apt_retry install -y --no-install-recommends qemu-user-static \
-            || { echo '::error::apt-get install of qemu-user-static failed'; exit 1; }
-          sudo update-binfmts --enable || true
           if [ "$ARCH" = aarch64 ]; then
-            [ -x /usr/bin/qemu-aarch64-static ] || { echo '::error::/usr/bin/qemu-aarch64-static missing after install'; exit 1; }
-            echo "emulator: $(ls -l /usr/bin/qemu-aarch64-static)"
+            echo "[workflow] aarch64 requested: installing qemu-user-static for emulation"
+            apt_retry install -y --no-install-recommends qemu-user-static binfmt-support \
+              || { echo '::error::apt-get install of qemu-user-static failed'; exit 1; }
+            sudo update-binfmts --enable || true
+            [ -x /usr/bin/qemu-aarch64-static ] || { echo '::error::/usr/bin/qemu-aarch64-static missing'; exit 1; }
+          else
+            echo "[workflow] native $ARCH build: qemu not needed, skipping"
           fi
-          ls /proc/sys/fs/binfmt_misc/ | grep -i -E 'qemu|aarch64' || echo 'no qemu binfmt entries listed'
+          echo "[workflow] step 2 done"
 
-      - name: Build disk image and bundle
+      - name: Step 3 - build disk image and UTM bundle
         shell: bash
         run: |
           set -o pipefail
+          echo "[workflow] running scripts/build-utm.sh as root"
           sudo -E ARCH="$ARCH" DISK_GB="$DISK_GB" bash scripts/build-utm.sh 2>&1 | tee build.log
           rc=${PIPESTATUS[0]}
+          echo "[workflow] build-utm.sh exit code: $rc"
           if [ "$rc" -ne 0 ]; then
             echo '::group::Last 150 lines of build output'
             tail -n 150 build.log
@@ -71,55 +77,32 @@ jobs:
           fi
           exit "$rc"
 
-      - name: Print failure log
+      - name: Step 4 - print failure log
         if: failure()
         run: |
           echo "=== TAIL OF BUILD LOG ==="
           tail -n 150 build.log || true
 
-      - name: Zip bundle
+      - name: Step 5 - verify bundle
         run: |
-          cd build
-          zip -r -q HomeCoffee.utm.zip HomeCoffee.utm
-          sha256sum HomeCoffee.utm.zip > HomeCoffee.utm.zip.sha256
-          ls -lh HomeCoffee.utm.zip
+          echo "[workflow] bundle contents:"
+          find build/HomeCoffee.utm -maxdepth 2 -exec ls -ld {} \;
+          test -f build/HomeCoffee.utm/config.plist
+          test -f build/HomeCoffee.utm/Data/disk.img
+          echo "[workflow] bundle verified"
 
-      - name: Upload artifact
+      - name: Step 6 - upload HomeCoffee.utm folder
         uses: actions/upload-artifact@v4
         with:
           name: HomeCoffee-${{ env.ARCH }}
-          path: |
-            build/HomeCoffee.utm.zip
-            build/HomeCoffee.utm.zip.sha256
+          path: build/HomeCoffee.utm
+          if-no-files-found: error
           retention-days: 14
 
-      - name: Upload build log on failure
+      - name: Step 7 - upload build log on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: build-log-${{ env.ARCH }}
           path: build.log
           retention-days: 7
-
-      - name: Publish tagged release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            build/HomeCoffee.utm.zip
-            build/HomeCoffee.utm.zip.sha256
-          generate_release_notes: true
-
-      - name: Publish rolling build release (main and manual runs)
-        if: "!startsWith(github.ref, 'refs/tags/v')"
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: build-latest-${{ env.ARCH }}
-          name: HomeCoffee build (${{ env.ARCH }}), latest
-          prerelease: true
-          body: |
-            Automatically built from ${{ github.sha }} (${{ github.ref_name }}).
-            This is a development build. Unzip HomeCoffee.utm.zip and open HomeCoffee.utm in UTM.
-          files: |
-            build/HomeCoffee.utm.zip
-            build/HomeCoffee.utm.zip.sha256
