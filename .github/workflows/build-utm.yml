@@ -45,7 +45,7 @@ jobs:
             return 1
           }
           apt_retry update || { echo '::error::apt-get update failed'; exit 1; }
-          apt_retry install -y --no-install-recommends binfmt-support gdisk dosfstools e2fsprogs zip curl ca-certificates util-linux parted \
+          apt_retry install -y --no-install-recommends binfmt-support gdisk dosfstools e2fsprogs zip curl ca-certificates util-linux parted kpartx \
             || { echo '::error::apt-get install of base tools failed'; exit 1; }
           apt_retry install -y --no-install-recommends qemu-user-static \
             || echo '::warning::qemu-user-static not available; build script will fetch the standalone binary'
@@ -57,17 +57,22 @@ jobs:
       - name: Build disk image and bundle
         shell: bash
         run: |
-          # Run as root explicitly. The script is invoked via bash, so it does not need the executable bit.
           set -o pipefail
-          sudo -E ARCH="$ARCH" DISK_GB="$DISK_GB" bash scripts/build-utm.sh 2>&1 | tee build-utm.log
+          sudo -E ARCH="$ARCH" DISK_GB="$DISK_GB" bash scripts/build-utm.sh 2>&1 | tee build.log
           rc=${PIPESTATUS[0]}
           if [ "$rc" -ne 0 ]; then
             echo '::group::Last 150 lines of build output'
-            tail -n 150 build-utm.log
+            tail -n 150 build.log
             echo '::endgroup::'
             echo "::error::build-utm.sh exited with $rc"
           fi
           exit "$rc"
+
+      - name: Print failure log
+        if: failure()
+        run: |
+          echo "=== TAIL OF BUILD LOG ==="
+          tail -n 150 build.log || true
 
       - name: Zip bundle
         run: |
@@ -90,7 +95,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: build-log-${{ env.ARCH }}
-          path: build-utm.log
+          path: build.log
           retention-days: 7
 
       - name: Publish tagged release
