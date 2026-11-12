@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Builds HomeCoffee.utm: a minimal console-only Alpine raw disk image (EFI + root) plus UTM config.
+# Builds HomeCoffee.utm: an Alpine-based raw disk image (EFI + root) with the full GUI desktop, plus UTM config.
 # Must run as root (sudo) on a Linux host. Env: ARCH (x86_64|aarch64, default x86_64), DISK_GB (default 2).
 # Output: build/HomeCoffee.utm/{config.plist,Data/disk.img} (unzipped bundle folder).
 # config.plist follows UTM's Configuration/*.swift decoders (ConfigurationVersion 4, singular Display/Drive/Network keys).
-# Packages are kept to the bare minimum to keep the zipped bundle under the 20 MB cap: no Xorg, no desktop, no nodejs.
+# qemu-user emulation is only used when ARCH differs from the host (never for x86_64 on an x86_64 runner).
 set -eEuxo pipefail
 
 ARCH="${ARCH:-x86_64}"
@@ -166,22 +166,26 @@ mount -t devtmpfs devtmpfs "$MNT/dev" || mount --bind /dev "$MNT/dev" || { echo 
 mkdir -p "$MNT/dev/pts"
 mount -t devpts devpts "$MNT/dev/pts" 2>/dev/null || true
 
-step 9 "install minimal Alpine packages in chroot (no X, no desktop, no nodejs)"
+step 9 "install Alpine GUI desktop packages in chroot (Xorg, openbox, nodejs)"
 chroot "$MNT" /bin/sh -c 'apk update && apk add --no-cache \
-  alpine-base linux-lts mkinitfs grub grub-efi efibootmgr'
+  alpine-base linux-lts linux-firmware-none mkinitfs grub grub-efi efibootmgr \
+  openrc xorg-server xinit xf86-video-fbdev openbox font-dejavu nodejs'
 echo homecoffee > "$MNT/etc/hostname"
 
-step 10 "copy HomeCoffee project into image (daemon, ui, lang only)"
+step 10 "copy HomeCoffee project into image"
 mkdir -p "$MNT/opt/homecoffee"
-cp -r "$REPO/daemon" "$REPO/ui" "$REPO/lang" "$MNT/opt/homecoffee/"
+cp -r "$REPO/daemon" "$REPO/ui" "$REPO/lang" "$REPO/docs" "$MNT/opt/homecoffee/"
 
-step 11 "console config: inittab (tty1 + ttyS0), GRUB console args"
+step 11 "console config: inittab (tty1 autologin + ttyS0), GRUB console args"
 cat > "$MNT/etc/inittab" <<'INITTAB'
 # /etc/inittab for HomeCoffee (written by scripts/build-utm.sh)
 ::sysinit:/sbin/openrc sysinit
 ::sysinit:/sbin/openrc boot
 ::wait:/sbin/openrc default
-tty1::respawn:/sbin/getty 38400 tty1
+tty1::respawn:/sbin/getty -n -l /bin/sh 38400 tty1
+tty2::respawn:/sbin/getty 38400 tty2
+tty3::respawn:/sbin/getty 38400 tty3
+tty4::respawn:/sbin/getty 38400 tty4
 ttyS0::respawn:/sbin/getty -L 115200 ttyS0 vt100
 ::ctrlaltdel:/sbin/reboot
 ::shutdown:/sbin/openrc shutdown
@@ -202,12 +206,9 @@ GRUBDEF
 mkdir -p "$MNT/etc/mkinitfs"
 echo 'features="ata base ext4 scsi virtio vfat"' > "$MNT/etc/mkinitfs/mkinitfs.conf"
 
-step 12 "trim rootfs to shrink the zip (docs, man pages, locales, apk cache, GPU/sound/wifi modules)"
-chroot "$MNT" /bin/sh -c 'apk cache clean 2>/dev/null; rm -rf /var/cache/apk/* /usr/share/man /usr/share/doc /usr/share/info /usr/share/groff /usr/share/bash-completion /usr/share/zoneinfo/posix /usr/share/zoneinfo/right' || true
+step 12 "safe trim: apk cache, man pages, docs, non-English locales (GPU/sound/driver modules kept)"
+chroot "$MNT" /bin/sh -c 'rm -rf /var/cache/apk/* /usr/share/man /usr/share/doc /usr/share/info' || true
 find "$MNT/usr/share/locale" -mindepth 1 -maxdepth 1 ! -name 'en*' -exec rm -rf {} + 2>/dev/null || true
-for d in "$MNT"/lib/modules/*/kernel/drivers/gpu "$MNT"/lib/modules/*/kernel/sound "$MNT"/lib/modules/*/kernel/drivers/media "$MNT"/lib/modules/*/kernel/drivers/net/wireless "$MNT"/lib/modules/*/kernel/net/wireless "$MNT"/lib/modules/*/kernel/drivers/bluetooth "$MNT"/lib/modules/*/kernel/net/bluetooth; do
-  [ -d "$d" ] && rm -rf "$d" || true
-done
 
 step 13 "fstab, initramfs, GRUB EFI ($EFI_TARGET)"
 cat > "$MNT/etc/fstab" <<'FSTAB'
