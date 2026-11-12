@@ -30,13 +30,21 @@ esac
 log() { echo "[build-utm] $*"; }
 mkdir -p "$BUILD" "$MNT"
 
-# Resolve a static qemu-user binary: PATH, /usr/bin, then the multiarch standalone release.
+# Resolve a usable static qemu-user binary to a real, executable ELF file.
+# Order: PATH, /usr/bin, then the multiarch standalone release.
+# Symlinks are followed (readlink -f) so the copy is the actual binary, not a dangling link.
 resolve_qemu() {
-  local name="$1" p
-  if p="$(command -v "$name" 2>/dev/null)" && [ -n "$p" ]; then echo "$p"; return 0; fi
-  if [ -x "/usr/bin/$name" ]; then echo "/usr/bin/$name"; return 0; fi
-  log "$name not installed; downloading standalone static binary"
-  local dest="$BUILD/bin/$name"
+  local name="$1" p real dest
+  for p in "$(command -v "$name" 2>/dev/null || true)" "/usr/bin/$name"; do
+    [ -n "$p" ] || continue
+    real="$(readlink -f "$p" 2>/dev/null || true)"
+    if [ -n "$real" ] && [ -f "$real" ] && [ -x "$real" ] && [ "$(head -c 4 "$real" | od -An -c | tr -d ' ')" = '177ELF' ]; then
+      echo "$real"; return 0
+    fi
+    log "ignoring $p (resolved: ${real:-none}; not a usable ELF file)"
+  done
+  log "$name not usable; downloading standalone static binary"
+  dest="$BUILD/bin/$name"
   mkdir -p "$BUILD/bin"
   curl -fsSL --retry 3 -o "$dest" \
     "https://github.com/multiarch/qemu-user-static/releases/download/v7.2.0-1/$name"
@@ -76,12 +84,28 @@ cleanup() { set +e; umount -R "$MNT" 2>/dev/null; [ -n "$LOOP" ] && losetup -d "
 trap cleanup EXIT
 udevadm settle 2>/dev/null || true
 sleep 1
-[ -e "${LOOP}p1" ] && [ -e "${LOOP}p2" ] || { echo "::error::partitions for $LOOP not visible; partprobe may be needed" >&2; partprobe "$LOOP" || true; sleep 2; }
-mkfs.vfat -F32 -n EFI "${LOOP}p1"
-mkfs.ext4 -q -L ROOT "${LOOP}p2"
-mount "${LOOP}p2" "$MNT"
+# Partition nodes: prefer the kernel's (losetup -P). If absent, map them with kpartx.
+if [ ! -e "${LOOP}p1" ] || [ ! -e "${LOOP}p2" ]; then
+  log "partition nodes missing for $LOOP; trying partprobe then kpartx"
+  partprobe "$LOOP" 2>/dev/null || true
+  sleep 2
+  if [ ! -e "${LOOP}p1" ] || [ ! -e "${LOOP}p2" ]; then
+    kpartx -av "$LOOP"
+    sleep 2
+    LOOPNAME="$(basename "$LOOP")"
+    if [ -e "/dev/mapper/${LOOPNAME}p1" ]; then
+      PART1="/dev/mapper/${LOOPNAME}p1"; PART2="/dev/mapper/${LOOPNAME}p2"
+    fi
+  fi
+fi
+PART1="${PART1:-${LOOP}p1}"
+PART2="${PART2:-${LOOP}p2}"
+[ -e "$PART1" ] && [ -e "$PART2" ] || { echo "::error::partition nodes not found for $LOOP (checked $PART1, $PART2)" >&2; exit 1; }
+mkfs.vfat -F32 -n EFI "$PART1"
+mkfs.ext4 -q -L ROOT "$PART2"
+mount "$PART2" "$MNT"
 mkdir -p "$MNT/boot/efi"
-mount "${LOOP}p1" "$MNT/boot/efi"
+mount "$PART1" "$MNT/boot/efi"
 
 # 3. Unpack minirootfs and prepare chroot.
 tar -xzf "$BUILD/$MINI" -C "$MNT"
@@ -90,7 +114,7 @@ if [ -n "$QEMU_BIN" ] && [ "$ARCH" != "$(uname -m)" ]; then
   QEMU_PATH="$(resolve_qemu "$QEMU_BIN")"
   log "using emulator: $QEMU_PATH"
   mkdir -p "$MNT/usr/bin"
-  cp "$QEMU_PATH" "$MNT/usr/bin/$QEMU_BIN"
+  cp -L "$QEMU_PATH" "$MNT/usr/bin/$QEMU_BIN"
   chmod +x "$MNT/usr/bin/$QEMU_BIN"
 fi
 # Bind the pseudo-filesystems into the chroot. Each mount reports its own error.
@@ -130,6 +154,7 @@ chroot "$MNT" /bin/sh -c 'rc-update add devfs sysinit; rc-update add networking 
 for d in dev/pts dev sys proc; do umount "$MNT/$d" 2>/dev/null || true; done
 umount "$MNT/boot/efi"
 umount "$MNT"
+if [ "$PART1" != "${LOOP}p1" ]; then kpartx -d "$LOOP" || true; fi
 losetup -d "$LOOP"
 LOOP=""
 trap - EXIT
