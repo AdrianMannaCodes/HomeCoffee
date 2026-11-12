@@ -1,0 +1,83 @@
+name: Build HomeCoffee.utm
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      arch:
+        description: 'Guest architecture'
+        type: choice
+        options: [aarch64, x86_64]
+        default: aarch64
+      disk_size_gb:
+        description: 'Raw disk size (GB)'
+        type: string
+        default: '4'
+
+concurrency:
+  group: build-utm-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      ARCH: ${{ inputs.arch || 'aarch64' }}
+      DISK_GB: ${{ inputs.disk_size_gb || '4' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install host tools (QEMU user emulation for chroot, image tools)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-user-static binfmt-support gdisk dosfstools e2fsprogs zip
+          sudo systemctl restart binfmt-support || true
+          ls /proc/sys/fs/binfmt_misc/ | grep -i qemu || true
+
+      - name: Build disk image and bundle
+        run: sudo -E ARCH="$ARCH" DISK_GB="$DISK_GB" bash scripts/build-utm.sh
+
+      - name: Zip bundle
+        run: |
+          cd build
+          zip -r -q HomeCoffee.utm.zip HomeCoffee.utm
+          sha256sum HomeCoffee.utm.zip > HomeCoffee.utm.zip.sha256
+          ls -lh HomeCoffee.utm.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HomeCoffee-${{ env.ARCH }}
+          path: |
+            build/HomeCoffee.utm.zip
+            build/HomeCoffee.utm.zip.sha256
+          retention-days: 14
+
+      - name: Publish tagged release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/HomeCoffee.utm.zip
+            build/HomeCoffee.utm.zip.sha256
+          generate_release_notes: true
+
+      - name: Publish rolling build release (main and manual runs)
+        if: "!startsWith(github.ref, 'refs/tags/v')"
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-latest-${{ env.ARCH }}
+          name: HomeCoffee build (${{ env.ARCH }}), latest
+          prerelease: true
+          body: |
+            Automatically built from ${{ github.sha }} (${{ github.ref_name }}).
+            This is a development build. Unzip HomeCoffee.utm.zip and open HomeCoffee.utm in UTM.
+          files: |
+            build/HomeCoffee.utm.zip
+            build/HomeCoffee.utm.zip.sha256
