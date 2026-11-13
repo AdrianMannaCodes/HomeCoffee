@@ -170,10 +170,11 @@ mount -t devtmpfs devtmpfs "$MNT/dev" || mount --bind /dev "$MNT/dev" || { echo 
 mkdir -p "$MNT/dev/pts"
 mount -t devpts devpts "$MNT/dev/pts" 2>/dev/null || true
 
-step 9 "install Alpine GUI desktop packages in chroot (Xorg, openbox, nodejs); no apk cache kept"
+step 9 "install Alpine GUI desktop packages in chroot (Xorg, openbox, nodejs, ALSA); no apk cache kept"
 chroot "$MNT" /bin/sh -c 'apk update && apk add --no-cache \
   alpine-base linux-lts linux-firmware-none mkinitfs grub grub-efi efibootmgr \
-  openrc xorg-server xinit xf86-video-fbdev openbox font-dejavu nodejs'
+  openrc xorg-server xinit xf86-video-fbdev openbox font-dejavu nodejs \
+  alsa-utils alsa-lib'
 echo homecoffee > "$MNT/etc/hostname"
 
 step 10 "copy HomeCoffee project into image"
@@ -210,6 +211,9 @@ cat > "$MNT/root/.xinitrc" <<'XINITRC'
 #!/bin/sh
 # ~/.xinitrc for HomeCoffee: openbox desktop plus the HomeCoffee daemon in the background.
 xsetroot -solid "#3a6ea5" 2>/dev/null || true
+# ALSA: unmute master and PCM outputs at 80% so audio plays on boot.
+amixer sset Master unmute 80% >/dev/null 2>&1 || true
+amixer sset PCM unmute 80% >/dev/null 2>&1 || true
 if command -v node >/dev/null 2>&1 && [ -f /opt/homecoffee/daemon/home-collab.js ]; then
   node /opt/homecoffee/daemon/home-collab.js >/var/log/hc-daemon.log 2>&1 &
 fi
