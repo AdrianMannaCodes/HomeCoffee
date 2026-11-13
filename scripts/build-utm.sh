@@ -28,8 +28,8 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 case "$ARCH" in
-  x86_64)  EFI_TARGET=x86_64-efi; QEMU_BIN=""; UTM_TARGET=q35; UTM_DISPLAY=virtio-vga; UTM_NET=e1000; UTM_SOUND=intel-hda ;;
-  aarch64) EFI_TARGET=arm64-efi; QEMU_BIN=qemu-aarch64-static; UTM_TARGET=virt; UTM_DISPLAY=virtio-ramfb; UTM_NET=virtio-net-pci; UTM_SOUND=intel-hda ;;
+  x86_64)  EFI_TARGET=x86_64-efi; QEMU_BIN=""; UTM_TARGET=q35; UTM_DISPLAY=virtio-vga; UTM_NET=e1000; UTM_SOUND=intel-hda; ROOT_DEV=/dev/vda2 ;;
+  aarch64) EFI_TARGET=arm64-efi; QEMU_BIN=qemu-aarch64-static; UTM_TARGET=virt; UTM_DISPLAY=virtio-ramfb; UTM_NET=virtio-net-pci; UTM_SOUND=intel-hda; ROOT_DEV=/dev/vda2 ;;
   *) echo "unsupported ARCH: $ARCH" >&2; exit 1 ;;
 esac
 
@@ -139,6 +139,11 @@ log "partitions: $PART1 $PART2"
 step 5 "format and mount"
 mkfs.vfat -F32 -n EFI "$PART1"
 mkfs.ext4 -q -L ROOT "$PART2"
+# Verify the label and filesystem on the real partition before going further.
+ROOT_LABEL="$(e2label "$PART2")"
+log "partition 2 ext4 label: '$ROOT_LABEL'"
+[ "$ROOT_LABEL" = "ROOT" ] || { echo "::error::partition 2 label is '$ROOT_LABEL', expected ROOT" >&2; exit 1; }
+tune2fs -l "$PART2" | grep -E 'Filesystem (magic|volume name|features)' || true
 mount "$PART2" "$MNT"
 mkdir -p "$MNT/boot/efi"
 mount "$PART1" "$MNT/boot/efi"
@@ -191,14 +196,15 @@ ttyS0::respawn:/sbin/getty -L 115200 ttyS0 vt100
 ::shutdown:/sbin/openrc shutdown
 INITTAB
 
-# Boot fix: explicit root by label (rw), panic=0 so a kernel panic halts and prints the error instead of rebooting in a loop.
-# Verbose (no 'quiet') so the real boot error is visible on screen and serial. GRUB menu stays visible for 3 seconds.
-cat > "$MNT/etc/default/grub" <<'GRUBDEF'
+# Boot fix: root is pinned to the virtio disk partition (UTM exposes it as vda, partition 2) with an explicit ext4 type.
+# panic=0 is intentionally NOT set: Alpine init exits ("Attempted to kill init") instead of opening a recovery shell when panic= is set.
+# Verbose (no 'quiet') so boot errors are visible. GRUB menu stays visible for 3 seconds.
+cat > "$MNT/etc/default/grub" <<GRUBDEF
 GRUB_DEFAULT=0
 GRUB_TIMEOUT=3
 GRUB_TIMEOUT_STYLE=menu
 GRUB_DISTRIBUTOR="HomeCoffee"
-GRUB_CMDLINE_LINUX_DEFAULT="root=LABEL=ROOT rw console=tty0 console=ttyS0,115200 panic=0"
+GRUB_CMDLINE_LINUX_DEFAULT="root=$ROOT_DEV rootfstype=ext4 rw console=tty0 console=ttyS0,115200"
 GRUB_CMDLINE_LINUX=""
 GRUB_TERMINAL="console serial"
 GRUB_SERIAL_COMMAND="serial --unit=0 --speed=115200"
@@ -223,11 +229,18 @@ KVER="$(ls "$MNT/lib/modules" | head -1)"
 log "kernel version: $KVER"
 chroot "$MNT" /bin/sh -c "mkinitfs -o /boot/initramfs-lts $KVER"
 ls -l "$MNT/boot/initramfs-lts" || { echo '::error::initramfs not created' >&2; exit 1; }
+# Verify the initramfs actually contains the block, virtio and ext4 modules needed to mount root.
+INITRD_LIST="$(zcat "$MNT/boot/initramfs-lts" | cpio -t 2>/dev/null || true)"
+for m in virtio_blk ext4; do
+  echo "$INITRD_LIST" | grep -q "$m" || { echo "::error::initramfs is missing $m module" >&2; exit 1; }
+done
+log "initramfs contains virtio_blk and ext4"
 chroot "$MNT" /bin/sh -c "grub-install --target=$EFI_TARGET --efi-directory=/boot/efi --removable --no-nvram"
 ls -l "$MNT/boot/efi/EFI/BOOT/" || { echo '::error::ESP has no EFI/BOOT directory after grub-install' >&2; exit 1; }
 chroot "$MNT" /bin/sh -c 'grub-mkconfig -o /boot/grub/grub.cfg'
 log "grub.cfg linux line:"
 grep -n 'linux ' "$MNT/boot/grub/grub.cfg" || log 'warning: no linux line in grub.cfg'
+grep -q "root=$ROOT_DEV" "$MNT/boot/grub/grub.cfg" || { echo "::error::grub.cfg does not pass root=$ROOT_DEV" >&2; exit 1; }
 
 step 14 "services: devfs, dmesg, bootmisc, syslog, networking, hwclock"
 chroot "$MNT" /bin/sh -c 'rc-update add devfs sysinit; rc-update add dmesg sysinit; rc-update add bootmisc boot; rc-update add syslog boot; rc-update add networking boot; rc-update add hwclock boot' || log 'warning: rc-update returned non-zero'
