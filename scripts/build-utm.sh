@@ -191,11 +191,14 @@ ttyS0::respawn:/sbin/getty -L 115200 ttyS0 vt100
 ::shutdown:/sbin/openrc shutdown
 INITTAB
 
+# Boot fix: explicit root by label (rw), panic=0 so a kernel panic halts and prints the error instead of rebooting in a loop.
+# Verbose (no 'quiet') so the real boot error is visible on screen and serial. GRUB menu stays visible for 3 seconds.
 cat > "$MNT/etc/default/grub" <<'GRUBDEF'
 GRUB_DEFAULT=0
-GRUB_TIMEOUT=2
+GRUB_TIMEOUT=3
+GRUB_TIMEOUT_STYLE=menu
 GRUB_DISTRIBUTOR="HomeCoffee"
-GRUB_CMDLINE_LINUX_DEFAULT="console=tty0 console=ttyS0,115200 quiet"
+GRUB_CMDLINE_LINUX_DEFAULT="root=LABEL=ROOT rw console=tty0 console=ttyS0,115200 panic=0"
 GRUB_CMDLINE_LINUX=""
 GRUB_TERMINAL="console serial"
 GRUB_SERIAL_COMMAND="serial --unit=0 --speed=115200"
@@ -219,7 +222,9 @@ KVER="$(ls "$MNT/lib/modules" | head -1)"
 [ -n "$KVER" ] || { echo '::error::no kernel modules found in image' >&2; exit 1; }
 log "kernel version: $KVER"
 chroot "$MNT" /bin/sh -c "mkinitfs -o /boot/initramfs-lts $KVER"
+ls -l "$MNT/boot/initramfs-lts" || { echo '::error::initramfs not created' >&2; exit 1; }
 chroot "$MNT" /bin/sh -c "grub-install --target=$EFI_TARGET --efi-directory=/boot/efi --removable --no-nvram"
+ls -l "$MNT/boot/efi/EFI/BOOT/" || { echo '::error::ESP has no EFI/BOOT directory after grub-install' >&2; exit 1; }
 chroot "$MNT" /bin/sh -c 'grub-mkconfig -o /boot/grub/grub.cfg'
 log "grub.cfg linux line:"
 grep -n 'linux ' "$MNT/boot/grub/grub.cfg" || log 'warning: no linux line in grub.cfg'
