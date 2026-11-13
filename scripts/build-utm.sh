@@ -28,7 +28,7 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 case "$ARCH" in
-  x86_64)  EFI_TARGET=x86_64-efi; QEMU_BIN=""; UTM_TARGET=q35; UTM_DISPLAY=virtio-vga; UTM_NET=e1000; UTM_SOUND=intel-hda; ROOT_DEV=/dev/vda2 ;;
+  x86_64)  EFI_TARGET=x86_64-efi; QEMU_BIN=""; UTM_TARGET=q35; UTM_DISPLAY=VGA; UTM_NET=e1000; UTM_SOUND=intel-hda; ROOT_DEV=/dev/vda2 ;;
   aarch64) EFI_TARGET=arm64-efi; QEMU_BIN=qemu-aarch64-static; UTM_TARGET=virt; UTM_DISPLAY=virtio-ramfb; UTM_NET=virtio-net-pci; UTM_SOUND=intel-hda; ROOT_DEV=/dev/vda2 ;;
   *) echo "unsupported ARCH: $ARCH" >&2; exit 1 ;;
 esac
@@ -139,7 +139,6 @@ log "partitions: $PART1 $PART2"
 step 5 "format and mount"
 mkfs.vfat -F32 -n EFI "$PART1"
 mkfs.ext4 -q -L ROOT "$PART2"
-# Verify the label and filesystem on the real partition before going further.
 ROOT_LABEL="$(e2label "$PART2")"
 log "partition 2 ext4 label: '$ROOT_LABEL'"
 [ "$ROOT_LABEL" = "ROOT" ] || { echo "::error::partition 2 label is '$ROOT_LABEL', expected ROOT" >&2; exit 1; }
@@ -171,7 +170,7 @@ mount -t devtmpfs devtmpfs "$MNT/dev" || mount --bind /dev "$MNT/dev" || { echo 
 mkdir -p "$MNT/dev/pts"
 mount -t devpts devpts "$MNT/dev/pts" 2>/dev/null || true
 
-step 9 "install Alpine GUI desktop packages in chroot (Xorg, openbox, nodejs)"
+step 9 "install Alpine GUI desktop packages in chroot (Xorg, openbox, nodejs); no apk cache kept"
 chroot "$MNT" /bin/sh -c 'apk update && apk add --no-cache \
   alpine-base linux-lts linux-firmware-none mkinitfs grub grub-efi efibootmgr \
   openrc xorg-server xinit xf86-video-fbdev openbox font-dejavu nodejs'
@@ -181,13 +180,14 @@ step 10 "copy HomeCoffee project into image"
 mkdir -p "$MNT/opt/homecoffee"
 cp -r "$REPO/daemon" "$REPO/ui" "$REPO/lang" "$REPO/docs" "$MNT/opt/homecoffee/"
 
-step 11 "console config: inittab (tty1 autologin + ttyS0), GRUB console args"
+step 11 "console config: inittab (tty1 autologin root + ttyS0), root .profile starts X on tty1, .xinitrc"
 cat > "$MNT/etc/inittab" <<'INITTAB'
 # /etc/inittab for HomeCoffee (written by scripts/build-utm.sh)
 ::sysinit:/sbin/openrc sysinit
 ::sysinit:/sbin/openrc boot
 ::wait:/sbin/openrc default
-tty1::respawn:/sbin/getty -n -l /bin/sh 38400 tty1
+# tty1: autologin root. login is respawned, so if X exits the root shell comes back and tty1 never locks.
+tty1::respawn:/bin/login -f root
 tty2::respawn:/sbin/getty 38400 tty2
 tty3::respawn:/sbin/getty 38400 tty3
 tty4::respawn:/sbin/getty 38400 tty4
@@ -195,6 +195,27 @@ ttyS0::respawn:/sbin/getty -L 115200 ttyS0 vt100
 ::ctrlaltdel:/sbin/reboot
 ::shutdown:/sbin/openrc shutdown
 INITTAB
+
+# Root profile: on tty1 with no DISPLAY, start the desktop once per boot. Plain shell on any other tty.
+cat > "$MNT/root/.profile" <<'PROFILE'
+# HomeCoffee: auto-start the X desktop on tty1 only.
+if [ "$(tty)" = "/dev/tty1" ] && [ -z "$DISPLAY" ] && [ -x /usr/bin/xinit ] && [ ! -f /tmp/.hc-x-started ]; then
+  touch /tmp/.hc-x-started
+  /usr/bin/xinit /root/.xinitrc -- :0 vt1 >/var/log/hc-xinit.log 2>&1
+  echo "X session ended (see /var/log/hc-xinit.log). You are in a shell; type xinit to restart the desktop."
+fi
+PROFILE
+
+cat > "$MNT/root/.xinitrc" <<'XINITRC'
+#!/bin/sh
+# ~/.xinitrc for HomeCoffee: openbox desktop plus the HomeCoffee daemon in the background.
+xsetroot -solid "#3a6ea5" 2>/dev/null || true
+if command -v node >/dev/null 2>&1 && [ -f /opt/homecoffee/daemon/home-collab.js ]; then
+  node /opt/homecoffee/daemon/home-collab.js >/var/log/hc-daemon.log 2>&1 &
+fi
+exec openbox
+XINITRC
+chmod 0755 "$MNT/root/.xinitrc"
 
 # Boot fix: root is pinned to the virtio disk partition (UTM exposes it as vda, partition 2) with an explicit ext4 type.
 # panic=0 is intentionally NOT set: Alpine init exits ("Attempted to kill init") instead of opening a recovery shell when panic= is set.
@@ -215,9 +236,17 @@ GRUBDEF
 mkdir -p "$MNT/etc/mkinitfs"
 echo 'features="ata base ext4 scsi virtio vfat"' > "$MNT/etc/mkinitfs/mkinitfs.conf"
 
-step 12 "safe trim: apk cache, man pages, docs, non-English locales (GPU/sound/driver modules kept)"
-chroot "$MNT" /bin/sh -c 'rm -rf /var/cache/apk/* /usr/share/man /usr/share/doc /usr/share/info' || true
+step 12 "trim: apk cache, docs, man pages, non-English locales, unused driver families"
+chroot "$MNT" /bin/sh -c 'rm -rf /var/cache/apk/* /usr/share/man /usr/share/doc /usr/share/info /usr/share/gtk-doc' || true
 find "$MNT/usr/share/locale" -mindepth 1 -maxdepth 1 ! -name 'en*' -exec rm -rf {} + 2>/dev/null || true
+# Unused driver families for a VM with virtio/VGA/e1000/intel-hda. Block, virtio, ext4, DRM/fb, sound kept.
+for fam in drivers/net/wireless drivers/bluetooth drivers/media drivers/staging drivers/isdn drivers/nfc drivers/infiniband net/wireless net/bluetooth; do
+  for d in "$MNT"/lib/modules/*/kernel/$fam; do [ -d "$d" ] && rm -rf "$d"; done
+done
+for d in "$MNT"/lib/modules/*; do
+  [ -d "$d" ] && chroot "$MNT" /bin/sh -c "depmod -a $(basename "$d")" || true
+done
+du -sh "$MNT" 2>/dev/null || true
 
 step 13 "fstab, initramfs, GRUB EFI ($EFI_TARGET)"
 cat > "$MNT/etc/fstab" <<'FSTAB'
@@ -229,7 +258,6 @@ KVER="$(ls "$MNT/lib/modules" | head -1)"
 log "kernel version: $KVER"
 chroot "$MNT" /bin/sh -c "mkinitfs -o /boot/initramfs-lts $KVER"
 ls -l "$MNT/boot/initramfs-lts" || { echo '::error::initramfs not created' >&2; exit 1; }
-# Verify the initramfs actually contains the block, virtio and ext4 modules needed to mount root.
 INITRD_LIST="$(zcat "$MNT/boot/initramfs-lts" | cpio -t 2>/dev/null || true)"
 for m in virtio_blk ext4; do
   echo "$INITRD_LIST" | grep -q "$m" || { echo "::error::initramfs is missing $m module" >&2; exit 1; }
@@ -245,7 +273,8 @@ grep -q "root=$ROOT_DEV" "$MNT/boot/grub/grub.cfg" || { echo "::error::grub.cfg 
 step 14 "services: devfs, dmesg, bootmisc, syslog, networking, hwclock"
 chroot "$MNT" /bin/sh -c 'rc-update add devfs sysinit; rc-update add dmesg sysinit; rc-update add bootmisc boot; rc-update add syslog boot; rc-update add networking boot; rc-update add hwclock boot' || log 'warning: rc-update returned non-zero'
 
-step 15 "zero free space (compresses far better), then unmount and detach"
+step 15 "clear apk cache, zero free space, unmount and detach"
+rm -rf "$MNT/var/cache/apk"/* 2>/dev/null || true
 # Fill free space with zeros so the raw image compresses well; ignore 'no space left' on the fill file.
 dd if=/dev/zero of="$MNT/zero.fill" bs=1M 2>/dev/null || true
 sync
@@ -262,8 +291,7 @@ trap - EXIT
 step 16 "assemble UTM bundle at $BUNDLE (target $UTM_TARGET, display $UTM_DISPLAY)"
 mkdir -p "$BUNDLE/Data"
 mv "$IMG" "$BUNDLE/Data/disk.img"
-# Keys and structure follow UTM's decoders: UTMConfigurationInfo, UTMQemuConfigurationSystem/QEMU/Input/Sharing,
-# UTMQemuConfigurationDisplay/Drive/Network/Serial/Sound. Every key UTM decodes without a default is written.
+# Keys and structure follow UTM's decoders. PS2Controller is on so the keyboard works without manual tweaks.
 cat > "$BUNDLE/config.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -299,7 +327,7 @@ cat > "$BUNDLE/config.plist" <<PLIST
     <key>Hypervisor</key><false/>
     <key>TSO</key><false/>
     <key>RTCLocalTime</key><false/>
-    <key>PS2Controller</key><false/>
+    <key>PS2Controller</key><true/>
     <key>InterruptRemapping</key><true/>
     <key>MemoryLock</key><true/>
     <key>AdditionalArguments</key><array/>
