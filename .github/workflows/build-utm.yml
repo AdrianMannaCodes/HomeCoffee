@@ -105,6 +105,7 @@ jobs:
           sudo apt-get -o Acquire::Retries=3 update
           sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends qemu-system-x86 ovmf
           command -v qemu-system-x86_64
+          ls -l /usr/share/OVMF/ || true
 
       - name: Step 5c - headless QEMU boot sanity check (serial log, fail on panic or no login)
         if: env.ARCH == 'x86_64'
@@ -114,14 +115,23 @@ jobs:
           BUNDLE=build/HomeCoffee.utm
           LOG=build/boot-serial.log
           rm -f "$LOG"
-          # Copy OVMF vars so the firmware can write; the disk is copied so the bundle stays untouched.
-          cp /usr/share/OVMF/OVMF_VARS_4M.fd build/OVMF_VARS.fd 2>/dev/null || cp /usr/share/OVMF/OVMF_VARS.fd build/OVMF_VARS.fd
-          cp "$BUNDLE/Data/disk.img" build/boot-test.img
+          # Firmware: pick the 4M variants when present, fail loudly if missing.
           OVMF_CODE=/usr/share/OVMF/OVMF_CODE_4M.fd
           [ -f "$OVMF_CODE" ] || OVMF_CODE=/usr/share/OVMF/OVMF_CODE.fd
-          echo "[boot-check] starting qemu (q35, 512M, serial to $LOG, 300s limit)"
-          timeout 300 qemu-system-x86_64 \
-            -machine q35,accel=tcg -m 512 -smp 2 \
+          [ -f "$OVMF_CODE" ] || { echo '::error::OVMF_CODE firmware not found in /usr/share/OVMF'; exit 1; }
+          OVMF_VARS_SRC=/usr/share/OVMF/OVMF_VARS_4M.fd
+          [ -f "$OVMF_VARS_SRC" ] || OVMF_VARS_SRC=/usr/share/OVMF/OVMF_VARS.fd
+          [ -f "$OVMF_VARS_SRC" ] || { echo '::error::OVMF_VARS firmware not found in /usr/share/OVMF'; exit 1; }
+          # Writable vars copy; the disk is copied so the bundle stays untouched.
+          cp "$OVMF_VARS_SRC" build/OVMF_VARS.fd || { echo '::error::could not copy OVMF vars'; exit 1; }
+          cp "$BUNDLE/Data/disk.img" build/boot-test.img || { echo '::error::could not copy disk image'; exit 1; }
+          # Use KVM when the runner exposes it; otherwise fall back to TCG (slower).
+          ACCEL=tcg; CPU=max
+          if [ -w /dev/kvm ]; then ACCEL=kvm; CPU=host; fi
+          echo "[boot-check] accel=$ACCEL cpu=$CPU firmware=$OVMF_CODE"
+          rc=0
+          timeout 600 qemu-system-x86_64 \
+            -machine q35,accel=$ACCEL -cpu $CPU -m 512 -smp 2 \
             -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
             -drive if=pflash,format=raw,file=build/OVMF_VARS.fd \
             -drive if=virtio,format=raw,file=build/boot-test.img \
@@ -129,11 +139,11 @@ jobs:
             -display none -no-reboot \
             -serial file:"$LOG" \
             -monitor none || rc=$?
-          echo "[boot-check] qemu exit code: ${rc:-0} (124 means the time limit was reached, which is expected for a running system)"
-          echo "[boot-check] ===== last 80 lines of serial log ====="
-          tail -n 80 "$LOG" || true
+          echo "[boot-check] qemu exit code: $rc (124 means the time limit was reached, which is expected for a running system)"
+          echo "[boot-check] ===== last 120 lines of serial log ====="
+          tail -n 120 "$LOG" 2>/dev/null || true
           if [ ! -s "$LOG" ]; then
-            echo '::error::boot check produced an empty serial log'; exit 1
+            echo '::error::boot check produced an empty serial log (qemu may not have started)'; exit 1
           fi
           if grep -Eq 'Kernel panic|Attempted to kill init|VFS: Unable to mount root' "$LOG"; then
             echo '::error::boot check found a kernel panic or root mount failure'; exit 1
@@ -142,6 +152,15 @@ jobs:
             echo '::error::boot check did not reach a login prompt on ttyS0 within the time limit'; exit 1
           fi
           echo "[boot-check] PASS: system booted to a login prompt with no panic"
+
+      - name: Step 5d - upload serial boot log (always, for diagnosis)
+        if: always() && env.ARCH == 'x86_64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: boot-serial-log-${{ env.ARCH }}
+          path: build/boot-serial.log
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Step 6 - package HomeCoffee-x86_64.utm.zip (max compression)
         shell: bash
