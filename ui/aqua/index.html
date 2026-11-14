@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="textedit.css">
 <link rel="stylesheet" href="finder.css">
 <link rel="stylesheet" href="messenger.css">
+<link rel="stylesheet" href="game.css">
 </head>
 <body>
 <div id="stage">
@@ -180,11 +181,35 @@
     </div>
   </section>
 
+  <section class="window" id="game-window">
+    <div class="titlebar">
+      <div class="lights"><span class="light close"></span><span class="light minimize"></span><span class="light zoom"></span></div>
+      <div class="title">Progressbar</div>
+    </div>
+    <div class="metal-toolbar">
+      <div class="pill-group">
+        <button class="pill" id="game-new" aria-label="New Game">New Game</button>
+      </div>
+      <span class="game-note">Move the bar with the mouse, touch, or the arrow keys.</span>
+    </div>
+    <div class="game-body">
+      <canvas id="game-canvas" width="600" height="400" aria-label="Progressbar game board"></canvas>
+      <div class="game-hud">
+        <span id="game-level"></span>
+        <span id="game-score"></span>
+        <span id="game-lives"></span>
+        <span id="game-hi"></span>
+      </div>
+      <div class="game-note" id="game-msg"></div>
+    </div>
+  </section>
+
   <div id="dock">
     <div class="dock-item dock-finder" data-app="finder-window" title="Finder"><span data-i18n="finder">Finder</span></div>
     <div class="dock-item dock-konsol" data-app="konsol-window" title="Terminal"><span data-i18n="konsol">Terminal</span></div>
     <div class="dock-item dock-notes" data-app="notes-window" title="TextEdit"><span data-i18n="notes">TextEdit</span></div>
     <div class="dock-item dock-messenger" data-app="messenger-window" title="Messenger"><span>Messenger</span></div>
+    <div class="dock-item dock-game" data-app="game-window" title="Progressbar"><span>Progressbar</span></div>
     <div class="dock-item dock-settings" data-app="settings-window" title="Settings"><span data-i18n="settings">Settings</span></div>
     <a class="dock-item dock-collab" href="../home/index.html" title="Collab Room"><span data-i18n="collab">Collab Room</span></a>
   </div>
@@ -193,5 +218,6 @@
 <script src="desktop.js"></script>
 <script src="apps.js"></script>
 <script src="messenger.js"></script>
+<script src="game.js"></script>
 </body>
 </html>
