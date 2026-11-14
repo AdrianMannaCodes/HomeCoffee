@@ -1,4 +1,4 @@
-name: Build HomeCoffee.utm
+name: Build BarOS 10.II.utm
 
 on:
   push:
@@ -90,11 +90,11 @@ jobs:
         run: |
           set -e
           echo "[workflow] verifying bundle"
-          test -f build/HomeCoffee.utm/config.plist
-          test -f build/HomeCoffee.utm/Data/disk.img
-          ls -lh build/HomeCoffee.utm build/HomeCoffee.utm/Data
-          grep -E 'Target|Architecture|Display|Hardware|PS2Controller' build/HomeCoffee.utm/config.plist
-          python3 -c "import plistlib; d=plistlib.load(open('build/HomeCoffee.utm/config.plist','rb')); assert d['ConfigurationVersion']==4; assert d['Backend']=='QEMU'; assert d['QEMU']['PS2Controller'] is True; [d[k] for k in ('Information','System','QEMU','Input','Sharing','Drive','Display','Network','Serial','Sound')]; print('config.plist keys OK')"
+          test -f build/BarOS-10.II.utm/config.plist
+          test -f build/BarOS-10.II.utm/Data/disk.img
+          ls -lh build/BarOS-10.II.utm build/BarOS-10.II.utm/Data
+          grep -E 'Target|Architecture|Display|Hardware|PS2Controller' build/BarOS-10.II.utm/config.plist
+          python3 -c "import plistlib; d=plistlib.load(open('build/BarOS-10.II.utm/config.plist','rb')); assert d['ConfigurationVersion']==4; assert d['Backend']=='QEMU'; assert d['QEMU']['PS2Controller'] is True; assert d['Information']['Name']=='BarOS 10.II'; [d[k] for k in ('Information','System','QEMU','Input','Sharing','Drive','Display','Network','Serial','Sound')]; print('config.plist keys OK')"
           echo "[workflow] bundle verified"
 
       - name: Step 5b - install QEMU and OVMF for headless boot check
@@ -115,7 +115,7 @@ jobs:
           set -uo pipefail
           # build/ was created by the root (sudo) build step, so take it back before writing into it.
           sudo chown -R "$(id -u):$(id -g)" build || true
-          BUNDLE=build/HomeCoffee.utm
+          BUNDLE=build/BarOS-10.II.utm
           LOG=build/boot-serial.log
           rm -f "$LOG"
           # Firmware: pick the 4M variants when present, fail loudly if missing.
@@ -151,7 +151,7 @@ jobs:
           if grep -Eq 'Kernel panic|Attempted to kill init|VFS: Unable to mount root' "$LOG"; then
             echo '::error::boot check found a kernel panic or root mount failure'; exit 1
           fi
-          if ! grep -Eq 'login:|homecoffee login' "$LOG"; then
+          if ! grep -Eq 'login:|baros login' "$LOG"; then
             echo '::error::boot check did not reach a login prompt on ttyS0 within the time limit'; exit 1
           fi
           echo "[boot-check] PASS: system booted to a login prompt with no panic"
@@ -165,16 +165,16 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-      - name: Step 6 - package HomeCoffee-x86_64.utm.zip (max compression)
+      - name: Step 6 - package BarOS-10.II-<arch>.utm.zip (max compression)
         shell: bash
         run: |
           set -e
           sudo chown -R "$(id -u):$(id -g)" build
           rm -f build/boot-test.img build/OVMF_VARS.fd
           cd build
-          ZIP="HomeCoffee-${ARCH}.utm.zip"
+          ZIP="BarOS-10.II-${ARCH}.utm.zip"
           rm -f "$ZIP" "$ZIP.sha256"
-          zip -9 -r -q "$ZIP" HomeCoffee.utm
+          zip -9 -r -q "$ZIP" BarOS-10.II.utm
           sha256sum "$ZIP" > "$ZIP.sha256"
           SIZE_MB=$(( $(stat -c %s "$ZIP") / 1024 / 1024 ))
           echo "[workflow] $ZIP size: ${SIZE_MB} MB (soft limit ${MAX_ZIP_MB} MB)"
@@ -187,10 +187,10 @@ jobs:
       - name: Step 7 - upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: HomeCoffee-${{ env.ARCH }}.utm.zip
+          name: BarOS-10.II-${{ env.ARCH }}.utm.zip
           path: |
-            build/HomeCoffee-${{ env.ARCH }}.utm.zip
-            build/HomeCoffee-${{ env.ARCH }}.utm.zip.sha256
+            build/BarOS-10.II-${{ env.ARCH }}.utm.zip
+            build/BarOS-10.II-${{ env.ARCH }}.utm.zip.sha256
           if-no-files-found: error
           retention-days: 14
 
@@ -199,18 +199,18 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
-          name: HomeCoffee nightly (${{ env.ARCH }})
+          name: BarOS 10.II Snow Catzebra nightly (${{ env.ARCH }})
           prerelease: true
           make_latest: false
           fail_on_unmatched_files: true
           body: |
-            Automated build from commit ${{ github.sha }} (${{ github.ref_name }}).
-            Download HomeCoffee-${{ env.ARCH }}.utm.zip, unzip it, and open HomeCoffee.utm in UTM.
+            BarOS 10.II Snow Catzebra (build 10A2148), automated build from commit ${{ github.sha }} (${{ github.ref_name }}).
+            Download BarOS-10.II-${{ env.ARCH }}.utm.zip, unzip it, and open BarOS 10.II.utm in UTM.
             Settings: Q35, x86_64, UEFI, 512 MB RAM, 2 cores, VGA display, 2 GB virtio disk, PS/2 keyboard on.
-            The desktop starts automatically on tty1. Full GUI desktop (Xorg, openbox, nodejs). This is a development build.
+            The desktop starts automatically on tty1. Full GUI desktop (Xorg, Chromium kiosk, nodejs). This is a development build.
           files: |
-            build/HomeCoffee-${{ env.ARCH }}.utm.zip
-            build/HomeCoffee-${{ env.ARCH }}.utm.zip.sha256
+            build/BarOS-10.II-${{ env.ARCH }}.utm.zip
+            build/BarOS-10.II-${{ env.ARCH }}.utm.zip.sha256
 
       - name: Step 9 - upload build log on failure
         if: failure()
