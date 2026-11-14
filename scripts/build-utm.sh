@@ -260,6 +260,11 @@ if command -v node >/dev/null 2>&1 && [ -f /opt/homecoffee/daemon/home-collab.js
   node /opt/homecoffee/daemon/home-collab.js >/var/log/hc-daemon.log 2>&1 &
 fi
 
+# Collab bridge: localhost relay (127.0.0.1:7421) used by the Aqua Messenger window, if present.
+if command -v node >/dev/null 2>&1 && [ -f /opt/homecoffee/daemon/collab-bridge.js ]; then
+  node /opt/homecoffee/daemon/collab-bridge.js >/var/log/hc-bridge.log 2>&1 &
+fi
+
 # Wait until httpd answers before opening the browser.
 i=0
 while [ $i -lt 30 ]; do
