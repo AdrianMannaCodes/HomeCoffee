@@ -22,3 +22,9 @@
 .msg-drop.drop { outline: 2px dashed #3a6ea5; outline-offset: -6px; }
 .msg-clip { font-size: 16px; }
 .dock-messenger { background: linear-gradient(#b6f0a0, #2f9b3a 60%, #1f6e2a); color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,.4); }
+
+/* Camera snapshot panel: live preview above the message log, with Take Photo and Cancel. */
+.msg-cam { display: flex; flex-direction: column; gap: 8px; padding: 10px; background: #1d2430; border-bottom: 1px solid #8e97a6; }
+.msg-cam video { width: 100%; max-height: 240px; background: #000; border-radius: 8px; object-fit: contain; }
+.msg-cam-bar { display: flex; align-items: center; gap: 8px; }
+.msg-cam-msg { margin-left: auto; font-size: 12px; color: #ffd1d8; }
