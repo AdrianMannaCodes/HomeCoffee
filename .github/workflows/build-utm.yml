@@ -107,7 +107,7 @@ jobs:
           command -v qemu-system-x86_64
           ls -l /usr/share/OVMF/ || true
 
-      - name: Step 5c - headless QEMU boot sanity check (serial log, fail on panic or no login)
+      - name: Step 5c - headless QEMU boot sanity check (serial log, fail on panic or no baros login)
         if: env.ARCH == 'x86_64'
         continue-on-error: true
         shell: bash
@@ -151,10 +151,10 @@ jobs:
           if grep -Eq 'Kernel panic|Attempted to kill init|VFS: Unable to mount root' "$LOG"; then
             echo '::error::boot check found a kernel panic or root mount failure'; exit 1
           fi
-          if ! grep -Eq 'login:|baros login' "$LOG"; then
-            echo '::error::boot check did not reach a login prompt on ttyS0 within the time limit'; exit 1
+          if ! grep -q 'baros login' "$LOG"; then
+            echo '::error::boot check did not reach the baros login prompt on ttyS0 within the time limit'; exit 1
           fi
-          echo "[boot-check] PASS: system booted to a login prompt with no panic"
+          echo "[boot-check] PASS: system booted to the baros login prompt with no panic"
 
       - name: Step 5d - upload serial boot log (always, for diagnosis)
         if: always() && env.ARCH == 'x86_64'
@@ -199,13 +199,13 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
-          name: BarOS 10.II Snow Catzebra nightly (${{ env.ARCH }})
+          name: BarOS 10.II Snow Catzebra nightly
           prerelease: true
           make_latest: false
           fail_on_unmatched_files: true
           body: |
             BarOS 10.II Snow Catzebra (build 10A2148), automated build from commit ${{ github.sha }} (${{ github.ref_name }}).
-            Download BarOS-10.II-${{ env.ARCH }}.utm.zip, unzip it, and open BarOS 10.II.utm in UTM.
+            Architecture: ${{ env.ARCH }}. Download BarOS-10.II-${{ env.ARCH }}.utm.zip, unzip it, and open BarOS 10.II.utm in UTM.
             Settings: Q35, x86_64, UEFI, 512 MB RAM, 2 cores, VGA display, 2 GB virtio disk, PS/2 keyboard on.
             The desktop starts automatically on tty1. Full GUI desktop (Xorg, Chromium kiosk, nodejs). This is a development build.
           files: |
