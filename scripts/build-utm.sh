@@ -170,9 +170,15 @@ mount -t devtmpfs devtmpfs "$MNT/dev" || mount --bind /dev "$MNT/dev" || { echo 
 mkdir -p "$MNT/dev/pts"
 mount -t devpts devpts "$MNT/dev/pts" 2>/dev/null || true
 
-step 9 "install Alpine GUI desktop packages in chroot (Xorg, input/video drivers, eudev, openbox, browser, busybox httpd, nodejs, ALSA); no apk cache kept"
+# Enable the Alpine community repository explicitly. Browsers and some GUI tools live there, and the minirootfs
+# does not always ship it uncommented.
+ALPINE_BRANCH="$(awk -F/ '/alpine\/(v[0-9.]+|latest-stable)/{for(i=1;i<=NF;i++) if($i ~ /^(v[0-9.]+|latest-stable)$/){print $i; exit}}' "$MNT/etc/apk/repositories" 2>/dev/null || true)"
+[ -n "$ALPINE_BRANCH" ] || ALPINE_BRANCH=latest-stable
+printf '%s\n%s\n' "https://dl-cdn.alpinelinux.org/alpine/$ALPINE_BRANCH/main" "https://dl-cdn.alpinelinux.org/alpine/$ALPINE_BRANCH/community" > "$MNT/etc/apk/repositories"
+log "apk repositories: $ALPINE_BRANCH main + community"
+
+step 9 "install Alpine GUI desktop packages in chroot (Xorg, input/video drivers, eudev, openbox, busybox httpd, nodejs, ALSA); no apk cache kept"
 # busybox-extras provides httpd (CGI support for the Finder and Konsol endpoints).
-# Browser: midori is preferred; surf is installed as a fallback if midori is not in the Alpine release.
 chroot "$MNT" /bin/sh -c 'apk update && apk add --no-cache \
   alpine-base linux-lts linux-firmware-none mkinitfs grub grub-efi efibootmgr \
   openrc eudev xorg-server xinit xf86-video-fbdev xf86-video-vesa \
@@ -180,7 +186,23 @@ chroot "$MNT" /bin/sh -c 'apk update && apk add --no-cache \
   openbox font-dejavu nodejs \
   busybox-extras \
   alsa-utils alsa-lib'
-chroot "$MNT" /bin/sh -c 'apk add --no-cache midori || apk add --no-cache surf || { echo "::error::no lightweight browser (midori/surf) available" >&2; exit 1; }'
+
+# Lightweight browser for the kiosk. Try each candidate in order; the first one Alpine provides wins.
+# Candidates: midori, surf, badwolf, netsurf-gtk (all lightweight WebKit/GTK or NetSurf browsers).
+BROWSER_PKG=""
+for pkg in midori surf badwolf netsurf-gtk; do
+  if chroot "$MNT" /bin/sh -c "apk add --no-cache $pkg" >/dev/null 2>&1; then
+    BROWSER_PKG="$pkg"
+    log "browser installed: $pkg"
+    break
+  fi
+  log "browser candidate not available: $pkg"
+done
+if [ -z "$BROWSER_PKG" ]; then
+  echo '::error::no lightweight browser (midori, surf, badwolf, netsurf-gtk) could be installed from Alpine' >&2
+  exit 1
+fi
+echo "$BROWSER_PKG" > "$MNT/root/.hc-browser"
 echo homecoffee > "$MNT/etc/hostname"
 
 step 10 "copy HomeCoffee project into image"
@@ -230,7 +252,7 @@ openbox >/var/log/hc-openbox.log 2>&1 &
 amixer sset Master unmute 80% >/dev/null 2>&1 || true
 amixer sset PCM unmute 80% >/dev/null 2>&1 || true
 
-# Static site plus CGI (Finder and Konsol) on port 8080. -h sets the document root; -c is not needed (CGI lives in cgi-bin).
+# Static site plus CGI (Finder and Konsol) on port 8080. -h sets the document root.
 httpd -p 8080 -h /opt/homecoffee >/var/log/hc-httpd.log 2>&1 &
 
 # HomeCoffee daemon, if present.
@@ -246,11 +268,19 @@ while [ $i -lt 30 ]; do
 done
 
 URL="http://localhost:8080/ui/aqua/index.html?display=ipad8"
-if command -v midori >/dev/null 2>&1; then
-  BROWSER_CMD="midori -e Fullscreen -a $URL"
-else
-  BROWSER_CMD="surf -F $URL"
-fi
+# Pick whichever browser the build installed (recorded in /root/.hc-browser), with a fallback search.
+BROWSER_PKG="$(cat /root/.hc-browser 2>/dev/null || true)"
+case "$BROWSER_PKG" in
+  midori) BROWSER_CMD="midori -e Fullscreen -a $URL" ;;
+  surf) BROWSER_CMD="surf -F $URL" ;;
+  badwolf) BROWSER_CMD="badwolf $URL" ;;
+  netsurf-gtk) BROWSER_CMD="netsurf-gtk $URL" ;;
+  *)
+    if command -v midori >/dev/null 2>&1; then BROWSER_CMD="midori -e Fullscreen -a $URL"
+    elif command -v surf >/dev/null 2>&1; then BROWSER_CMD="surf -F $URL"
+    elif command -v badwolf >/dev/null 2>&1; then BROWSER_CMD="badwolf $URL"
+    else BROWSER_CMD="netsurf-gtk $URL"; fi ;;
+esac
 
 # Kiosk loop: if the browser exits, relaunch it so the desktop never goes dark.
 while true; do
