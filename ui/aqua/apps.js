@@ -12,7 +12,8 @@
       konsolError: 'Command failed to run.', items: 'items',
       teWords: 'words', teChars: 'characters', teSaved: 'Saved', teSaveFail: 'Could not save', teOpenFail: 'Could not open',
       teOpened: 'Opened', teSavePrompt: 'Save as (file name, or full path; .html or .txt):', teOverwrite: 'Replace the existing file',
-      teOpenPrompt: 'Open file (full path):', teDiscard: 'Discard unsaved changes?', teTxtWarn: 'Plain text: formatting is not kept in .txt files.'
+      teOpenPrompt: 'Open file (full path):', teDiscard: 'Discard unsaved changes?', teTxtWarn: 'Plain text: formatting is not kept in .txt files.',
+      teLocal: 'Autosaved in this browser.'
     },
     eo: {
       finder: 'Dosiera Administrilo', konsol: 'Terminalo', notes: 'Tekstredaktilo', settings: 'Agordoj', collab: 'Kunlabora Ĉambro',
@@ -55,7 +56,7 @@
     lang = code;
     document.documentElement.lang = code;
     document.querySelectorAll('[data-i18n]').forEach(function (el) { el.textContent = t(el.getAttribute('data-i18n')); });
-    var ed = $('notes-text'); if (ed) ed.setAttribute('data-placeholder', t('notesPlaceholder'));
+    var ph = $('notes-text'); if (ph) ph.setAttribute('data-placeholder', t('notesPlaceholder'));
     var inp = $('konsol-in'); if (inp) inp.setAttribute('placeholder', t('prompt'));
     storeSet(LANG_KEY, code);
     renderPlaces();
@@ -99,7 +100,7 @@
     main.innerHTML = '';
     if (view === 'icons') {
       var grid = document.createElement('div'); grid.className = 'fs-grid';
-      entries.forEach(function (e) { grid.appendChild(makeItem(e)); });
+      entries.forEach(function (e) { grid.appendChild(makeItem(e, 'fs-item')); });
       main.appendChild(grid);
     } else {
       var tbl = document.createElement('table'); tbl.className = 'fs-list';
@@ -137,6 +138,7 @@
       var now = Date.now(), key = e.name;
       document.querySelectorAll('.fs-selected').forEach(function (s) { s.classList.remove('fs-selected'); });
       el.classList.add('fs-selected');
+      selName = e.name;
       if (lastTap.key === key && now - lastTap.time < 450) { lastTap = { key: '', time: 0 }; activate(e); }
       else lastTap = { key: key, time: now };
     });
@@ -144,8 +146,64 @@
   }
 
   function activate(e) {
-    if (e.type === 'dir') go(join(cur, e.name), true);
-    else $('fs-status').textContent = e.name + ' - ' + fmtSize(e.size);
+    if (e.type === 'dir') { go(join(cur, e.name), true); return; }
+    if (/\.(html?|txt)$/i.test(e.name)) { teShow(); teOpenPath(join(cur, e.name)); return; }
+    $('fs-status').textContent = e.name + ' - ' + fmtSize(e.size);
+  }
+
+  // Finder file operations (fsops.cgi). Selected item is tracked in selName.
+  var selName = null;
+  function selectedEntry() { return entries.filter(function (e) { return e.name === selName; })[0] || null; }
+  function fsReport(r, okMsg) {
+    if (r.json && r.json.ok) { $('fs-status').textContent = okMsg; return true; }
+    $('fs-status').textContent = (r.json && r.json.error) || ('HTTP ' + r.status);
+    return false;
+  }
+  function refresh() { go(cur, false); }
+  function fzNewFolder() {
+    var name = window.prompt('Folder name:', 'New Folder');
+    if (!name || !name.trim()) return;
+    fsCall('mkdir', join(cur, name.trim()), '').then(function (r) { if (fsReport(r, 'Folder created')) refresh(); });
+  }
+  function fzNewFile() {
+    var name = window.prompt('File name (use .html or .txt):', 'Untitled.html');
+    if (!name || !name.trim()) return;
+    var n = name.trim(); if (!/\.(html?|txt)$/i.test(n)) n += '.html';
+    fsCall('upload', join(cur, n), '').then(function (r) { if (fsReport(r, 'File created')) refresh(); });
+  }
+  function fzDelete() {
+    var e = selectedEntry();
+    if (!e) { $('fs-status').textContent = 'Select an item first.'; return; }
+    if (!window.confirm('Delete ' + e.name + '?')) return;
+    fsCall('delete', join(cur, e.name), '').then(function (r) { if (fsReport(r, 'Deleted ' + e.name)) { selName = null; refresh(); } });
+  }
+  function fzDownload() {
+    var e = selectedEntry();
+    if (!e || e.type !== 'file') { $('fs-status').textContent = 'Select a file first.'; return; }
+    var a = document.createElement('a');
+    a.href = '/cgi-bin/fsops.cgi?action=download&path=' + encodeURIComponent(join(cur, e.name));
+    a.setAttribute('download', e.name);
+    document.body.appendChild(a); a.click(); a.parentNode.removeChild(a);
+  }
+  // Upload: raw request body (no multipart). Refuses to overwrite; 'upload' returns 409 on existing names.
+  function uploadFiles(files) {
+    Array.prototype.forEach.call(files, function (f) {
+      if (f.size > 26214400) { $('fs-status').textContent = f.name + ': too large (25 MB max)'; return; }
+      var target = join(cur, f.name);
+      fetch('/cgi-bin/fsops.cgi?action=upload&path=' + encodeURIComponent(target), { method: 'POST', body: f, cache: 'no-store' })
+        .then(function (r) { return r.text().then(function (txt) { var j = null; try { j = JSON.parse(txt); } catch (e) {} return { status: r.status, json: j }; }); })
+        .then(function (r) { fsReport(r, 'Uploaded ' + f.name); refresh(); })
+        .catch(function () { $('fs-status').textContent = 'Upload failed: ' + f.name; });
+    });
+  }
+  function bindUpload() {
+    var main = $('fs-main'), input = $('fz-file-input');
+    if (!main || !input) return;
+    $('fz-upload').onclick = function () { input.click(); };
+    input.addEventListener('change', function () { uploadFiles(input.files); input.value = ''; });
+    main.addEventListener('dragover', function (e) { e.preventDefault(); main.classList.add('fs-drop'); });
+    main.addEventListener('dragleave', function () { main.classList.remove('fs-drop'); });
+    main.addEventListener('drop', function (e) { e.preventDefault(); main.classList.remove('fs-drop'); if (e.dataTransfer && e.dataTransfer.files) uploadFiles(e.dataTransfer.files); });
   }
 
   function go(path, push) {
@@ -419,6 +477,11 @@
     $('fz-fwd').onclick = navFwd;
     $('view-icons').onclick = function () { view = 'icons'; renderFs(); };
     $('view-list').onclick = function () { view = 'list'; renderFs(); };
+    $('fz-newfolder').onclick = fzNewFolder;
+    $('fz-newfile').onclick = fzNewFile;
+    $('fz-delete').onclick = fzDelete;
+    $('fz-download').onclick = fzDownload;
+    bindUpload();
   }
 
   function bindKonsol() {
@@ -444,6 +507,7 @@
     go('/root', true);
   });
 
+  // Finder hook for opening files in TextEdit (wired in the Finder commit).
   window.RedStarApps = {
     applyLang: applyLang,
     go: go,
