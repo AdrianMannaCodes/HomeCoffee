@@ -178,19 +178,26 @@ ALPINE_BRANCH="$(awk -F/ '/alpine\/(v[0-9.]+|latest-stable)/{for(i=1;i<=NF;i++) 
 [ -n "$ALPINE_BRANCH" ] || ALPINE_BRANCH=latest-stable
 printf '%s\n%s\n' "https://dl-cdn.alpinelinux.org/alpine/$ALPINE_BRANCH/main" "https://dl-cdn.alpinelinux.org/alpine/$ALPINE_BRANCH/community" > "$MNT/etc/apk/repositories"
 log "apk repositories: $ALPINE_BRANCH main + community"
+log "apk repositories file inside chroot:"
+cat "$MNT/etc/apk/repositories"
 
-step 9 "install Alpine GUI desktop packages in chroot (Xorg, input/video drivers, eudev, openbox, busybox httpd, nodejs, ALSA); no apk cache kept"
+step 9 "install Alpine GUI desktop packages in chroot (Xorg, input/video drivers, eudev, openbox, busybox httpd, nodejs, ALSA, ifupdown-ng); no apk cache kept"
 # busybox-extras provides httpd (CGI support for the Finder and Konsol endpoints).
+# ifupdown-ng provides the ifup/ifdown parser that OpenRC's networking service uses to read /etc/network/interfaces.
 chroot "$MNT" /bin/sh -c 'apk update && apk add --no-cache \
   alpine-base linux-lts linux-firmware-none mkinitfs grub grub-efi efibootmgr \
   openrc eudev xorg-server xinit xf86-video-fbdev xf86-video-vesa \
   xf86-input-libinput xf86-input-evdev xsetroot \
   openbox font-dejavu nodejs \
   busybox-extras \
-  alsa-utils alsa-lib'
+  alsa-utils alsa-lib \
+  ifupdown-ng'
 
-# Kiosk browser: Midori first, then Surf. Each apk add is run with its output visible in the build log,
-# and a candidate only counts when its binary is actually present in the image.
+# Kiosk browser: Midori first, then Surf. Before trying, log the repo state and what apk can see, so a failed
+# install shows the cause in the build log. A candidate only counts when its binary is actually present in the image.
+chroot "$MNT" /bin/sh -c 'apk update' || log 'warning: apk update failed before browser install'
+log "apk package search for browser candidates (diagnostic):"
+chroot "$MNT" /bin/sh -c 'apk search -v midori surf' || log 'warning: apk search returned no matches for midori or surf'
 BROWSER_PKG=""
 for pkg in midori surf; do
   log "apk add $pkg (candidate browser)"
