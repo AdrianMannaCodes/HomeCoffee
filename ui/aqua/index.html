@@ -6,6 +6,7 @@
 <title>Red Star OS 3.0</title>
 <link rel="stylesheet" href="aqua.css">
 <link rel="stylesheet" href="textedit.css">
+<link rel="stylesheet" href="finder.css">
 </head>
 <body>
 <div id="stage">
@@ -24,6 +25,14 @@
       <div class="seg" role="group">
         <button id="view-icons" data-i18n="icons" aria-pressed="true">Icons</button>
         <button id="view-list" data-i18n="list" aria-pressed="false">List</button>
+      </div>
+      <div class="pill-group">
+        <button class="pill" id="fz-newfolder" aria-label="New Folder">New Folder</button>
+        <button class="pill" id="fz-newfile" aria-label="New File">New File</button>
+        <button class="pill" id="fz-upload" aria-label="Upload">Upload</button>
+        <input type="file" id="fz-file-input" multiple style="display:none">
+        <button class="pill" id="fz-download" aria-label="Download">Download</button>
+        <button class="pill" id="fz-delete" aria-label="Delete">Delete</button>
       </div>
       <span class="fs-path" id="fs-path"></span>
     </div>
