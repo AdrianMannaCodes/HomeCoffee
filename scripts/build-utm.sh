@@ -149,6 +149,8 @@ mount "$PART1" "$MNT/boot/efi"
 
 step 6 "unpack minirootfs"
 tar -xzf "$BUILD/$MINI" -C "$MNT"
+# Build-time resolver: the host copy so apk can reach the mirrors from inside the chroot.
+# The image gets its own static resolv.conf in step 14.
 cp /etc/resolv.conf "$MNT/etc/resolv.conf"
 
 step 7 "emulator setup"
@@ -187,19 +189,24 @@ chroot "$MNT" /bin/sh -c 'apk update && apk add --no-cache \
   busybox-extras \
   alsa-utils alsa-lib'
 
-# Lightweight browser for the kiosk. Try each candidate in order; the first one Alpine provides wins.
-# Candidates: midori, surf, badwolf, netsurf-gtk (all lightweight WebKit/GTK or NetSurf browsers).
+# Kiosk browser: Midori first, then Surf. Each apk add is run with its output visible in the build log,
+# and a candidate only counts when its binary is actually present in the image.
 BROWSER_PKG=""
-for pkg in midori surf badwolf netsurf-gtk; do
-  if chroot "$MNT" /bin/sh -c "apk add --no-cache $pkg" >/dev/null 2>&1; then
-    BROWSER_PKG="$pkg"
-    log "browser installed: $pkg"
-    break
+for pkg in midori surf; do
+  log "apk add $pkg (candidate browser)"
+  if chroot "$MNT" /bin/sh -c "apk add --no-cache $pkg"; then
+    if chroot "$MNT" /bin/sh -c "command -v $pkg" >/dev/null 2>&1; then
+      BROWSER_PKG="$pkg"
+      log "browser installed and verified: $pkg"
+      break
+    fi
+    log "apk reported success for $pkg but the binary is missing"
+  else
+    log "apk add $pkg failed"
   fi
-  log "browser candidate not available: $pkg"
 done
 if [ -z "$BROWSER_PKG" ]; then
-  echo '::error::no lightweight browser (midori, surf, badwolf, netsurf-gtk) could be installed from Alpine' >&2
+  echo '::error::neither midori nor surf could be installed from Alpine' >&2
   exit 1
 fi
 echo "$BROWSER_PKG" > "$MNT/root/.hc-browser"
@@ -273,18 +280,14 @@ while [ $i -lt 30 ]; do
 done
 
 URL="http://localhost:8080/ui/aqua/index.html?display=ipad8"
-# Pick whichever browser the build installed (recorded in /root/.hc-browser), with a fallback search.
+# The build records the installed kiosk browser in /root/.hc-browser: midori or surf only.
 BROWSER_PKG="$(cat /root/.hc-browser 2>/dev/null || true)"
 case "$BROWSER_PKG" in
   midori) BROWSER_CMD="midori -e Fullscreen -a $URL" ;;
   surf) BROWSER_CMD="surf -F $URL" ;;
-  badwolf) BROWSER_CMD="badwolf $URL" ;;
-  netsurf-gtk) BROWSER_CMD="netsurf-gtk $URL" ;;
   *)
-    if command -v midori >/dev/null 2>&1; then BROWSER_CMD="midori -e Fullscreen -a $URL"
-    elif command -v surf >/dev/null 2>&1; then BROWSER_CMD="surf -F $URL"
-    elif command -v badwolf >/dev/null 2>&1; then BROWSER_CMD="badwolf $URL"
-    else BROWSER_CMD="netsurf-gtk $URL"; fi ;;
+    echo "no kiosk browser recorded in /root/.hc-browser (got '$BROWSER_PKG')" >>/var/log/hc-browser.log
+    exit 1 ;;
 esac
 
 # Kiosk loop: if the browser exits, relaunch it so the desktop never goes dark.
@@ -348,7 +351,18 @@ log "grub.cfg linux line:"
 grep -n 'linux ' "$MNT/boot/grub/grub.cfg" || log 'warning: no linux line in grub.cfg'
 grep -q "root=$ROOT_DEV" "$MNT/boot/grub/grub.cfg" || { echo "::error::grub.cfg does not pass root=$ROOT_DEV" >&2; exit 1; }
 
-step 14 "services: devfs, dmesg, udev, udev-trigger, bootmisc, syslog, networking, hwclock"
+step 14 "networking (DHCP on eth0), image resolver fallback, services"
+# Network: loopback plus DHCP on the first NIC. udhcpc (busybox) runs under the networking service at boot.
+cat > "$MNT/etc/network/interfaces" <<'NETIF'
+auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet dhcp
+NETIF
+# Static fallback resolvers for the image: QEMU user-mode DNS first, then a public resolver.
+# The DHCP client rewrites this file on boot when the lease carries DNS servers.
+printf 'nameserver 10.0.2.3\nnameserver 1.1.1.1\n' > "$MNT/etc/resolv.conf"
 chroot "$MNT" /bin/sh -c 'rc-update add devfs sysinit; rc-update add dmesg sysinit; rc-update add udev sysinit; rc-update add udev-trigger sysinit; rc-update add bootmisc boot; rc-update add syslog boot; rc-update add networking boot; rc-update add hwclock boot' || log 'warning: rc-update returned non-zero'
 
 step 15 "clear apk cache, zero free space, unmount and detach"
