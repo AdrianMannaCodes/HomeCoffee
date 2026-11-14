@@ -76,7 +76,7 @@
     fetch(bridgeBase() + '/poll?session=' + encodeURIComponent(session), { cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (j) {
-        if (!j.ok) { session = null; stopPoll(); setStatus(false, 'Disconnected'); addBubble('', 'Connection lost: ' + (j.error || 'unknown'), 'system'); showChat(false); return; }
+        if (!j.ok) { session = null; stopPoll(); camStop(); setStatus(false, 'Disconnected'); addBubble('', 'Connection lost: ' + (j.error || 'unknown'), 'system'); showChat(false); return; }
         (j.messages || []).forEach(function (m) { addBubble(m.from, m.body, 'peer'); });
       })
       .catch(function () { /* bridge briefly unreachable; retry on next tick */ });
@@ -120,8 +120,53 @@
     });
   }
 
+  // Camera: live preview through getUserMedia when the browser allows it. If it does not (or permission is refused),
+  // the native capture input opens instead. Either way the photo is saved to Shared and shared as a [file] link.
+  var camStream = null;
+  function camSupported() { return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia); }
+  function camStop() {
+    if (camStream) { camStream.getTracks().forEach(function (t) { t.stop(); }); camStream = null; }
+    var v = $('msg-cam-video'); if (v) v.srcObject = null;
+    var p = $('msg-cam-panel'); if (p) p.style.display = 'none';
+  }
+  function camOpen() {
+    if (!session) { setError('Connect first.'); return; }
+    if (!camSupported()) { $('msg-cam-file').click(); return; }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+      .then(function (stream) {
+        camStop();
+        camStream = stream;
+        var v = $('msg-cam-video');
+        v.srcObject = stream;
+        v.play().catch(function () {});
+        $('msg-cam-msg').textContent = '';
+        $('msg-cam-panel').style.display = '';
+      })
+      .catch(function () { $('msg-cam-file').click(); });
+  }
+  function camSnap() {
+    var v = $('msg-cam-video'), c = $('msg-cam-canvas');
+    if (!camStream || !v.videoWidth) { $('msg-cam-msg').textContent = 'Camera is not ready yet.'; return; }
+    var w = Math.min(v.videoWidth, 1280), h = Math.round(v.videoHeight * (w / v.videoWidth));
+    c.width = w; c.height = h;
+    c.getContext('2d').drawImage(v, 0, 0, w, h);
+    c.toBlob(function (blob) {
+      camStop();
+      if (!blob) { addBubble('', 'Could not capture the photo.', 'system'); return; }
+      shareFiles([photoFile(blob)]);
+    }, 'image/jpeg', 0.85);
+  }
+  function photoFile(blob) {
+    var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; };
+    var name = 'Photo-' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds()) + '.jpg';
+    if (typeof File === 'function') { try { return new File([blob], name, { type: 'image/jpeg' }); } catch (e) { /* fall through */ } }
+    blob.name = name;
+    return blob;
+  }
+
   function disconnect() {
     stopPoll();
+    camStop();
     if (session) post('/leave', { session: session }).catch(function () {});
     session = null;
     setStatus(false, 'Not connected');
@@ -146,6 +191,12 @@
     $('msg-disconnect').onclick = disconnect;
     $('msg-clip').onclick = function () { $('msg-file').click(); };
     $('msg-file').addEventListener('change', function (e) { shareFiles(e.target.files); e.target.value = ''; });
+    if ($('msg-cam')) {
+      $('msg-cam').onclick = camOpen;
+      $('msg-cam-snap').onclick = camSnap;
+      $('msg-cam-cancel').onclick = camStop;
+      $('msg-cam-file').addEventListener('change', function (e) { shareFiles(e.target.files); e.target.value = ''; });
+    }
     var chat = $('msg-chat');
     chat.addEventListener('dragover', function (e) { e.preventDefault(); chat.classList.add('drop'); });
     chat.addEventListener('dragleave', function () { chat.classList.remove('drop'); });
@@ -153,5 +204,5 @@
   }
 
   document.addEventListener('DOMContentLoaded', init);
-  window.RedStarMessenger = { connect: connect, disconnect: disconnect, shareFiles: shareFiles };
+  window.RedStarMessenger = { connect: connect, disconnect: disconnect, shareFiles: shareFiles, camera: camOpen };
 })();
