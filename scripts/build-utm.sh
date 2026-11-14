@@ -170,10 +170,12 @@ mount -t devtmpfs devtmpfs "$MNT/dev" || mount --bind /dev "$MNT/dev" || { echo 
 mkdir -p "$MNT/dev/pts"
 mount -t devpts devpts "$MNT/dev/pts" 2>/dev/null || true
 
-step 9 "install Alpine GUI desktop packages in chroot (Xorg, openbox, nodejs, ALSA); no apk cache kept"
+step 9 "install Alpine GUI desktop packages in chroot (Xorg, input/video drivers, eudev, openbox, xterm, nodejs, ALSA); no apk cache kept"
 chroot "$MNT" /bin/sh -c 'apk update && apk add --no-cache \
   alpine-base linux-lts linux-firmware-none mkinitfs grub grub-efi efibootmgr \
-  openrc xorg-server xinit xf86-video-fbdev openbox font-dejavu nodejs \
+  openrc eudev xorg-server xinit xf86-video-fbdev xf86-video-vesa \
+  xf86-input-libinput xf86-input-evdev xsetroot \
+  openbox xterm font-dejavu nodejs \
   alsa-utils alsa-lib'
 echo homecoffee > "$MNT/etc/hostname"
 
@@ -211,6 +213,8 @@ cat > "$MNT/root/.xinitrc" <<'XINITRC'
 #!/bin/sh
 # ~/.xinitrc for HomeCoffee: openbox desktop plus the HomeCoffee daemon in the background.
 xsetroot -solid "#3a6ea5" 2>/dev/null || true
+# Open a terminal immediately so the screen is never empty once X boots.
+xterm &
 # ALSA: unmute master and PCM outputs at 80% so audio plays on boot.
 amixer sset Master unmute 80% >/dev/null 2>&1 || true
 amixer sset PCM unmute 80% >/dev/null 2>&1 || true
@@ -274,8 +278,8 @@ log "grub.cfg linux line:"
 grep -n 'linux ' "$MNT/boot/grub/grub.cfg" || log 'warning: no linux line in grub.cfg'
 grep -q "root=$ROOT_DEV" "$MNT/boot/grub/grub.cfg" || { echo "::error::grub.cfg does not pass root=$ROOT_DEV" >&2; exit 1; }
 
-step 14 "services: devfs, dmesg, bootmisc, syslog, networking, hwclock"
-chroot "$MNT" /bin/sh -c 'rc-update add devfs sysinit; rc-update add dmesg sysinit; rc-update add bootmisc boot; rc-update add syslog boot; rc-update add networking boot; rc-update add hwclock boot' || log 'warning: rc-update returned non-zero'
+step 14 "services: devfs, dmesg, udev, udev-trigger, bootmisc, syslog, networking, hwclock"
+chroot "$MNT" /bin/sh -c 'rc-update add devfs sysinit; rc-update add dmesg sysinit; rc-update add udev sysinit; rc-update add udev-trigger sysinit; rc-update add bootmisc boot; rc-update add syslog boot; rc-update add networking boot; rc-update add hwclock boot' || log 'warning: rc-update returned non-zero'
 
 step 15 "clear apk cache, zero free space, unmount and detach"
 rm -rf "$MNT/var/cache/apk"/* 2>/dev/null || true
