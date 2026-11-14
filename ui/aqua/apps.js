@@ -1,4 +1,4 @@
-// HomeCoffee Aqua apps: Finder, Konsol, TextEdit (Notes), and Settings (English, Esperanto, Yezik). Browser only.
+// HomeCoffee Aqua apps: Finder, Terminal, TextEdit (rich text, saves to /root/Documents via fsops.cgi), and Settings (English, Esperanto, Yezik). Browser only.
 (function () {
   'use strict';
   var STRINGS = {
@@ -9,7 +9,10 @@
       langLabel: 'Interface language', langSaved: 'Language saved.', save: 'Save',
       emptyFolder: 'This folder is empty.', fsError: 'Could not read this folder.', name: 'Name', size: 'Size', kind: 'Kind',
       folder: 'Folder', file: 'Document', prompt: 'Type a command', notesPlaceholder: 'Type your notes here...',
-      konsolError: 'Command failed to run.', items: 'items'
+      konsolError: 'Command failed to run.', items: 'items',
+      teWords: 'words', teChars: 'characters', teSaved: 'Saved', teSaveFail: 'Could not save', teOpenFail: 'Could not open',
+      teOpened: 'Opened', teSavePrompt: 'Save as (file name, or full path; .html or .txt):', teOverwrite: 'Replace the existing file',
+      teOpenPrompt: 'Open file (full path):', teDiscard: 'Discard unsaved changes?', teTxtWarn: 'Plain text: formatting is not kept in .txt files.'
     },
     eo: {
       finder: 'Dosiera Administrilo', konsol: 'Terminalo', notes: 'Tekstredaktilo', settings: 'Agordoj', collab: 'Kunlabora Ĉambro',
@@ -30,7 +33,8 @@
       konsolError: 'Komanda ne sabotila.', items: 'elementi'
     }
   };
-  var LANG_KEY = 'hc.lang', NOTES_KEY = 'hc.notes';
+  var LANG_KEY = 'hc.lang', NOTES_KEY = 'hc.notes', NOTES_HTML_KEY = 'hc.notes.html', TE_FILE_KEY = 'hc.notes.file';
+  var TE_DIR = '/root/Documents';
   var PLACES = [
     { key: 'home', path: '/root' },
     { key: 'documents', path: '/root/Documents' },
@@ -51,7 +55,7 @@
     lang = code;
     document.documentElement.lang = code;
     document.querySelectorAll('[data-i18n]').forEach(function (el) { el.textContent = t(el.getAttribute('data-i18n')); });
-    var ph = $('notes-text'); if (ph) ph.setAttribute('placeholder', t('notesPlaceholder'));
+    var ed = $('notes-text'); if (ed) ed.setAttribute('data-placeholder', t('notesPlaceholder'));
     var inp = $('konsol-in'); if (inp) inp.setAttribute('placeholder', t('prompt'));
     storeSet(LANG_KEY, code);
     renderPlaces();
@@ -95,7 +99,7 @@
     main.innerHTML = '';
     if (view === 'icons') {
       var grid = document.createElement('div'); grid.className = 'fs-grid';
-      entries.forEach(function (e) { grid.appendChild(makeItem(e, 'fs-item')); });
+      entries.forEach(function (e) { grid.appendChild(makeItem(e)); });
       main.appendChild(grid);
     } else {
       var tbl = document.createElement('table'); tbl.className = 'fs-list';
@@ -183,16 +187,231 @@
       .then(function () { kBusy = false; konsolPrompt(); });
   }
 
-  // Settings and Notes
+  // File API: /cgi-bin/fsops.cgi (loopback only, paths limited to /root and /opt/homecoffee).
+  // GET = read (raw text on success); POST with a text body = write. Errors come back as JSON.
+  function fsCall(action, path, body) {
+    var opts = { method: body === undefined ? 'GET' : 'POST', cache: 'no-store' };
+    if (body !== undefined) { opts.headers = { 'Content-Type': 'text/plain; charset=utf-8' }; opts.body = body; }
+    return fetch('/cgi-bin/fsops.cgi?action=' + action + '&path=' + encodeURIComponent(path), opts)
+      .then(function (r) {
+        return r.text().then(function (txt) {
+          var j = null;
+          if (r.status !== 200 || body !== undefined) { try { j = JSON.parse(txt); } catch (e) { j = null; } }
+          return { status: r.status, text: txt, json: j };
+        });
+      });
+  }
+
+  // TextEdit: rich text in a contenteditable surface. Documents save as styled HTML (.html) or plain text (.txt).
+  var teFile = null, teDirty = false, teSaveTimer = null, teRange = null;
+
+  function teEditor() { return $('notes-text'); }
+  function teMsg(msg) { var s = $('te-msg'); if (s) s.textContent = msg || ''; }
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+  function teCounts() {
+    var ed = teEditor(); if (!ed) return;
+    var text = (ed.innerText || '').replace(/\u00a0/g, ' ');
+    var trimmed = text.trim();
+    var words = trimmed ? trimmed.split(/\s+/).length : 0;
+    var chars = text.replace(/\n/g, '').length;
+    var el = $('te-counts'); if (el) el.textContent = words + ' ' + t('teWords') + ' | ' + chars + ' ' + t('teChars');
+  }
+
+  // Remove anything active from HTML before it goes into the editor.
+  function teSanitize(html) {
+    var doc = new DOMParser().parseFromString(html, 'text/html');
+    var body = doc.body;
+    body.querySelectorAll('script,iframe,object,embed,link,meta,style').forEach(function (n) { n.parentNode.removeChild(n); });
+    body.querySelectorAll('*').forEach(function (n) {
+      Array.prototype.slice.call(n.attributes).forEach(function (a) {
+        var nm = a.name.toLowerCase();
+        if (nm.indexOf('on') === 0 || ((nm === 'href' || nm === 'src') && /^\s*javascript:/i.test(a.value))) n.removeAttribute(a.name);
+      });
+    });
+    return body.innerHTML;
+  }
+
+  function teSerialize() {
+    var title = teFile ? teFile.split('/').pop() : 'Untitled';
+    return '<!doctype html>\n<html>\n<head>\n<meta charset="utf-8">\n<meta name="generator" content="HomeCoffee TextEdit">\n<title>' + esc(title) + '</title>\n</head>\n<body>\n' +
+      teEditor().innerHTML + '\n</body>\n</html>\n';
+  }
+
+  function teAutosave() {
+    var ed = teEditor(); if (!ed) return;
+    storeSet(NOTES_HTML_KEY, ed.innerHTML);
+    storeSet(TE_FILE_KEY, teFile || '');
+  }
+
+  function teChanged() {
+    teDirty = true;
+    teCounts();
+    clearTimeout(teSaveTimer);
+    teSaveTimer = setTimeout(teAutosave, 400);
+  }
+
+  // Keep the editor selection while toolbar controls (selects, color pickers) have focus.
+  function teTrackSel() {
+    var s = window.getSelection();
+    var ed = teEditor();
+    if (s && s.rangeCount && ed && ed.contains(s.anchorNode)) teRange = s.getRangeAt(0).cloneRange();
+  }
+  function teRestore() {
+    var ed = teEditor(); if (!ed) return;
+    ed.focus();
+    if (teRange) { var s = window.getSelection(); s.removeAllRanges(); s.addRange(teRange); }
+  }
+
+  function teCmd(cmd, val) {
+    teRestore();
+    document.execCommand(cmd, false, val === undefined ? null : val);
+    teChanged();
+    teUpdateState();
+  }
+
+  function teSetSize(px) {
+    teRestore();
+    document.execCommand('fontSize', false, '7');
+    teEditor().querySelectorAll('font[size="7"]').forEach(function (f) {
+      var sp = document.createElement('span');
+      sp.style.fontSize = px + 'px';
+      while (f.firstChild) sp.appendChild(f.firstChild);
+      f.parentNode.replaceChild(sp, f);
+    });
+    teChanged();
+  }
+
+  function teUpdateState() {
+    ['bold', 'italic', 'underline', 'strikeThrough'].forEach(function (c) {
+      var b = document.querySelector('[data-te-cmd="' + c + '"]');
+      if (!b) return;
+      var on = false;
+      try { on = document.queryCommandState(c); } catch (e) { on = false; }
+      b.setAttribute('aria-pressed', String(!!on));
+    });
+  }
+
+  function teWrite(path) {
+    var isText = /\.txt$/i.test(path);
+    var body = isText ? teEditor().innerText : teSerialize();
+    return fsCall('write', path, body).then(function (r) {
+      if (r.json && r.json.ok) {
+        teFile = path; teDirty = false; teAutosave();
+        teMsg(t('teSaved') + ': ' + path + (isText ? ' (' + t('teTxtWarn') + ')' : ''));
+      } else {
+        teMsg(t('teSaveFail') + ': ' + (r.json ? r.json.error : r.status));
+      }
+    }).catch(function () { teMsg(t('teSaveFail')); });
+  }
+
+  function tePath(name) {
+    name = name.trim();
+    return name.charAt(0) === '/' ? name : TE_DIR + '/' + name;
+  }
+
+  function teSave(asNew) {
+    if (!teFile || asNew) return teSaveAs();
+    return teWrite(teFile);
+  }
+
+  function teSaveAs() {
+    var suggested = teFile ? teFile.split('/').pop() : 'Untitled.html';
+    var name = window.prompt(t('teSavePrompt'), suggested);
+    if (!name || !name.trim()) return Promise.resolve();
+    var path = tePath(name);
+    if (!/\.(html?|txt)$/i.test(path)) path += '.html';
+    return fsCall('read', path).then(function (r) {
+      if (r.status === 200 && !window.confirm(t('teOverwrite') + ': ' + path + '?')) return;
+      return teWrite(path);
+    });
+  }
+
+  function teOpenPath(path) {
+    return fsCall('read', path).then(function (r) {
+      if (r.status !== 200) { teMsg(t('teOpenFail') + ': ' + (r.json ? r.json.error : r.status)); return; }
+      var ed = teEditor();
+      if (/\.html?$/i.test(path)) {
+        ed.classList.remove('te-plain');
+        ed.innerHTML = teSanitize(r.text);
+      } else {
+        ed.classList.add('te-plain');
+        ed.textContent = r.text;
+      }
+      teFile = path; teDirty = false;
+      teCounts(); teAutosave();
+      teMsg(t('teOpened') + ': ' + path);
+    }).catch(function () { teMsg(t('teOpenFail')); });
+  }
+
+  function teShow() { var w = $('notes-window'); if (w) w.style.display = ''; }
+
+  function teTogglePreview() {
+    var win = $('notes-window');
+    var on = !win.classList.contains('te-preview');
+    win.classList.toggle('te-preview', on);
+    teEditor().setAttribute('contenteditable', on ? 'false' : 'true');
+    $('te-preview').setAttribute('aria-pressed', String(on));
+  }
+
+  function bindTextEdit() {
+    var ed = teEditor(); if (!ed) return;
+    ed.addEventListener('input', teChanged);
+    ed.addEventListener('keydown', function (e) {
+      if ((e.ctrlKey || e.metaKey) && e.key && e.key.toLowerCase() === 's') { e.preventDefault(); teSave(e.shiftKey); }
+    });
+    document.addEventListener('selectionchange', function () { teTrackSel(); teUpdateState(); });
+
+    // Toolbar buttons keep focus in the editor (mousedown is cancelled), so the selection survives the click.
+    document.querySelectorAll('[data-te-cmd]').forEach(function (b) {
+      b.addEventListener('mousedown', function (e) { e.preventDefault(); });
+      b.addEventListener('click', function () { teCmd(b.getAttribute('data-te-cmd'), b.getAttribute('data-te-val') || undefined); });
+    });
+
+    $('te-font').addEventListener('change', function (e) { teRestore(); document.execCommand('fontName', false, e.target.value); teChanged(); });
+    $('te-size').addEventListener('change', function (e) { teSetSize(parseInt(e.target.value, 10)); });
+    $('te-fore').addEventListener('input', function (e) { teRestore(); document.execCommand('foreColor', false, e.target.value); teChanged(); });
+    $('te-hilite').addEventListener('input', function (e) {
+      teRestore();
+      var c = 'hiliteColor';
+      try { if (!document.queryCommandSupported(c)) c = 'backColor'; } catch (err) { c = 'backColor'; }
+      document.execCommand(c, false, e.target.value);
+      teChanged();
+    });
+
+    $('te-new').addEventListener('click', function () {
+      if (teDirty && !window.confirm(t('teDiscard'))) return;
+      teFile = null; teDirty = false;
+      ed.innerHTML = ''; ed.classList.remove('te-plain');
+      teCounts(); teAutosave(); teMsg('');
+    });
+    $('te-open').addEventListener('click', function () {
+      var p = window.prompt(t('teOpenPrompt'), TE_DIR + '/');
+      if (p && p.trim()) teOpenPath(tePath(p));
+    });
+    $('te-save').addEventListener('click', function () { teSave(false); });
+    $('te-saveas').addEventListener('click', function () { teSave(true); });
+    $('te-preview').addEventListener('click', teTogglePreview);
+    $('te-print').addEventListener('click', function () { window.print(); });
+  }
+
+  function teInit() {
+    var ed = teEditor(); if (!ed) return;
+    var html = storeGet(NOTES_HTML_KEY);
+    if (html !== null) ed.innerHTML = teSanitize(html);
+    else {
+      var legacy = storeGet(NOTES_KEY) || '';
+      if (legacy) ed.textContent = legacy;
+    }
+    teFile = storeGet(TE_FILE_KEY) || null;
+    if (teFile === '') teFile = null;
+    teCounts();
+    teUpdateState();
+  }
+
   function bindSettings() {
     var sel = $('lang-select');
     if (sel) { sel.value = lang; sel.addEventListener('change', function () { applyLang(sel.value); $('lang-status').textContent = t('langSaved'); }); }
-  }
-
-  function bindNotes() {
-    var ta = $('notes-text'); if (!ta) return;
-    ta.value = storeGet(NOTES_KEY) || '';
-    ta.addEventListener('input', function () { storeSet(NOTES_KEY, ta.value); });
   }
 
   function bindFinder() {
@@ -218,11 +437,17 @@
     if (!$('finder-window')) return;
     applyLang(lang);
     bindSettings();
-    bindNotes();
+    teInit();
+    bindTextEdit();
     bindFinder();
     bindKonsol();
     go('/root', true);
   });
 
-  window.RedStarApps = { applyLang: applyLang, go: go };
+  window.RedStarApps = {
+    applyLang: applyLang,
+    go: go,
+    openFile: function (path) { teShow(); return teOpenPath(path); },
+    saveFile: function () { return teSave(false); }
+  };
 })();
