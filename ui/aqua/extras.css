@@ -1,0 +1,64 @@
+/* Aqua extras: Activity Monitor, Disk Utility, desktop icons, Applications menu. Brushed metal and aqua pills match aqua.css. */
+
+/* Desktop file layer sits under all windows and above the wallpaper. */
+.desk-layer { position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: 0; }
+.desk-layer.drop-over { box-shadow: inset 0 0 0 3px rgba(255,255,255,.7); }
+.desk-icon {
+  position: absolute; width: 88px; display: flex; flex-direction: column; align-items: center;
+  padding: 4px 2px; border-radius: 6px; cursor: default; user-select: none; touch-action: none;
+}
+.desk-icon.sel { background: rgba(158,201,255,.35); }
+.desk-icon .ico { width: 52px; height: 44px; border-radius: 8px; background: linear-gradient(#a9d3ff, #3c85d8); box-shadow: inset 0 1px 0 rgba(255,255,255,.6), 0 2px 3px rgba(0,0,0,.35); }
+.desk-icon.file .ico { width: 40px; background: linear-gradient(#ffffff, #d7dde8); border: 1px solid #8e97a6; }
+.desk-icon .label { margin-top: 4px; font-size: 12px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.85); text-align: center; word-break: break-all; max-width: 100%; padding: 0 4px; border-radius: 3px; }
+.desk-icon.sel .label { background: #2f7be0; }
+.desk-msg { position: absolute; left: 12px; bottom: 92px; max-width: 70%; font-size: 12px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.85); pointer-events: none; }
+
+/* Context menus (Desktop and Applications) */
+.desk-menu, .app-menu {
+  position: absolute; min-width: 180px; padding: 4px 0; font-size: 13px;
+  background: linear-gradient(#fbfcfe, #dfe4ec); border: 1px solid #6b7486; border-radius: 6px;
+  box-shadow: 0 6px 16px rgba(0,0,0,.4);
+}
+.desk-menu { z-index: 3000; display: none; }
+.app-menu { z-index: 2000; display: none; left: 300px; top: 22px; }
+.desk-menu button, .app-menu button { display: block; width: 100%; text-align: left; font: inherit; background: none; border: 0; padding: 5px 14px; cursor: default; color: var(--ink); }
+.desk-menu button:hover, .app-menu button:hover { background: linear-gradient(#b9dcff, #2f7be0); color: #fff; }
+.menu-apps { cursor: default; padding: 1px 6px; border-radius: 4px; }
+.menu-apps.open { background: linear-gradient(#b9dcff, #2f7be0); color: #fff; }
+
+/* Dock tiles */
+.dock-activity { background: linear-gradient(#4a5366, #121826); }
+.dock-diskutil { background: linear-gradient(#ffffff, #9aa3b3); color: #1d2430; text-shadow: none; }
+
+/* Activity Monitor and Disk Utility */
+.am-src { font-size: 11px; color: #4a5366; margin-left: auto; white-space: nowrap; }
+.am-top { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px 10px 6px; }
+.am-card { background: #fff; border: 1px solid #aab3c3; border-radius: 8px; padding: 8px; min-width: 0; }
+.am-h { font-weight: 700; font-size: 12px; margin-bottom: 4px; }
+.am-card canvas { width: 100%; height: 90px; display: block; background: #0b1626; border-radius: 4px; }
+.am-meter { height: 18px; border-radius: 999px; background: #dfe4ec; border: 1px solid #7a8396; overflow: hidden; box-shadow: inset 0 1px 2px rgba(0,0,0,.25); margin-top: 18px; }
+.am-fill { height: 100%; width: 0; background: linear-gradient(#b9dcff, #2f7be0); transition: width .4s; }
+.am-val { font-size: 12px; margin-top: 6px; color: #374152; }
+.am-procs { flex: 1; min-height: 120px; overflow: auto; margin: 0 10px 6px; background: #fff; border: 1px solid #aab3c3; }
+.am-procs tbody tr { cursor: default; }
+.am-procs tbody tr.sel td { background: #cfe3ff; }
+.du-wrap { flex: 1; display: flex; min-height: 0; }
+.du-disks { width: 200px; flex: 0 0 200px; overflow: auto; background: linear-gradient(#dfe6f0, #c3ccd9); border-right: 1px solid #8e97a6; padding: 8px 6px; list-style: none; margin: 0; }
+.du-disks li { padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px; margin-bottom: 3px; }
+.du-disks li.sel { background: linear-gradient(#b9dcff, #2f7be0); color: #fff; }
+.du-main { flex: 1; overflow: auto; padding: 12px; background: #fbfcfe; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.du-bar { height: 20px; border-radius: 999px; background: #dfe4ec; border: 1px solid #7a8396; overflow: hidden; }
+.du-bar div { height: 100%; width: 0; background: linear-gradient(#b9dcff, #2f7be0); }
+.du-info { white-space: pre-line; }
+.du-log { flex: 1; min-height: 90px; margin: 0; background: #fff; border: 1px solid #aab3c3; padding: 6px; font: 12px Menlo, Monaco, 'DejaVu Sans Mono', monospace; white-space: pre-wrap; overflow: auto; color: #1d2430; }
+
+/* Responsive: stack panels and wrap toolbars on narrow displays */
+@media (max-width: 700px) {
+  .am-top { grid-template-columns: 1fr; }
+  .du-wrap { flex-direction: column; }
+  .du-disks { width: auto; flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 4px; border-right: 0; border-bottom: 1px solid #8e97a6; }
+  .du-disks li { margin: 0; }
+  .metal-toolbar { flex-wrap: wrap; }
+  .am-procs { margin: 0 6px 6px; }
+}
