@@ -49,6 +49,7 @@ body {
 .light.close { background: radial-gradient(circle at 35% 30%, #ffd1cc, #e0392b 60%, #9b1d13); }
 .light.minimize { background: radial-gradient(circle at 35% 30%, #fff3c4, #f0b429 60%, #a8760c); }
 .light.zoom { background: radial-gradient(circle at 35% 30%, #d6f7c9, #3fb83f 60%, #237a23); }
+.light.close, .light.minimize { cursor: pointer; }
 .window-body { flex: 1; overflow: auto; padding: 10px; background: #fbfcfe; }
 
 .aqua-btn {
@@ -80,3 +81,81 @@ body {
 }
 .dock-item { width: 48px; height: 48px; border-radius: 12px; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,.4); background: linear-gradient(#8fb6e8, #3c6fb3); box-shadow: 0 2px 4px rgba(0,0,0,.4); }
 .dock-item.home { background: linear-gradient(#ffb3a8, #c8102e); }
+
+/* Tiger-style brushed metal toolbar and pill controls */
+.metal-toolbar {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 10px; padding: 6px 10px;
+  background: repeating-linear-gradient(90deg, rgba(255,255,255,.14) 0 1px, rgba(0,0,0,.035) 1px 2px), linear-gradient(#e6e9ef, #b7bfcc);
+  border-bottom: 1px solid #6b7486;
+}
+.pill-group { display: inline-flex; border: 1px solid #5f6a80; border-radius: 999px; overflow: hidden; box-shadow: 0 1px 1px rgba(0,0,0,.2); }
+.pill { font: inherit; font-size: 12px; font-weight: 700; padding: 4px 14px; border: 0; cursor: pointer; background: linear-gradient(#ffffff, #dfe4ec 50%, #c9d0dc 52%, #eef1f6); color: var(--ink); }
+.pill + .pill { border-left: 1px solid #7a8396; }
+.pill:disabled { opacity: .45; cursor: default; }
+.seg { display: inline-flex; border: 1px solid #5f6a80; border-radius: 999px; overflow: hidden; }
+.seg button { font: inherit; font-size: 12px; font-weight: 700; padding: 4px 14px; border: 0; cursor: pointer; background: linear-gradient(#fff, #d5dbe6); }
+.seg button[aria-pressed="true"] { background: linear-gradient(#b9dcff, #2f7be0); color: #fff; }
+.fs-path { margin-left: auto; font-size: 12px; color: #374152; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+
+/* Finder */
+.finder-body { flex: 1; display: flex; min-height: 0; }
+.sidebar {
+  width: 160px; flex: 0 0 160px; padding: 8px 6px; overflow: auto;
+  background: linear-gradient(#dfe6f0, #c3ccd9); border-right: 1px solid #8e97a6;
+}
+.side-head { font-size: 11px; font-weight: 700; color: #4a5366; padding: 4px 8px; text-transform: none; }
+.sidebar ul { list-style: none; margin: 0; padding: 0; }
+.side-item { font-size: 13px; padding: 4px 8px; border-radius: 6px; cursor: pointer; margin-bottom: 2px; }
+.side-item:hover { background: rgba(255,255,255,.5); }
+.side-item.sel { background: linear-gradient(#b9dcff, #2f7be0); color: #fff; text-shadow: 0 -1px 0 rgba(0,0,0,.25); }
+.fs-main { flex: 1; overflow: auto; padding: 10px; background: #fff; }
+.fs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
+.fs-item { display: flex; flex-direction: column; align-items: center; padding: 6px 4px; border-radius: 8px; cursor: default; user-select: none; }
+.fs-item.fs-selected, .fs-row.fs-selected td { background: #cfe3ff; }
+.fs-ico { width: 48px; height: 40px; border-radius: 6px; margin-bottom: 4px;
+  background: linear-gradient(#a9d3ff, #3c85d8); box-shadow: inset 0 1px 0 rgba(255,255,255,.6); }
+.fs-item.file .fs-ico { background: linear-gradient(#ffffff, #d7dde8); border: 1px solid #8e97a6; width: 36px; margin: 0 auto 4px; }
+.fs-name { font-size: 12px; text-align: center; word-break: break-all; max-width: 100%; }
+.fs-list { width: 100%; border-collapse: collapse; font-size: 12px; }
+.fs-list th { text-align: left; background: linear-gradient(#f5f7fb, #dfe4ec); border-bottom: 1px solid #aab3c3; padding: 4px 6px; }
+.fs-list td { padding: 3px 6px; border-bottom: 1px solid #eef1f6; cursor: default; user-select: none; }
+.fs-empty { color: #5a6474; font-size: 13px; padding: 20px; text-align: center; }
+.fs-status { flex: 0 0 auto; font-size: 11px; color: #3b4455; padding: 3px 10px; background: linear-gradient(#e6e9ef, #cfd6e2); border-top: 1px solid #8e97a6; }
+
+/* Konsol */
+.window-body.konsol { background: #ffffff; padding: 8px; display: flex; flex-direction: column; font-family: Menlo, Monaco, "DejaVu Sans Mono", monospace; }
+.konsol pre { flex: 1; margin: 0; overflow: auto; font-size: 12px; white-space: pre-wrap; word-break: break-word; color: #1d2430; }
+.konsol-line { display: flex; align-items: center; gap: 4px; font-size: 12px; border-top: 1px solid #e3e7ef; padding-top: 6px; }
+.konsol-input { flex: 1; border: 0; outline: 0; font: inherit; font-size: 12px; background: transparent; color: #1d2430; }
+
+/* TextEdit */
+.notes-text { width: 100%; height: 100%; border: 0; resize: none; padding: 10px; font: inherit; font-size: 13px; background: #fffef6; color: var(--ink); outline: 0; }
+
+/* Settings */
+.window-body.settings { padding: 16px; font-size: 13px; }
+.setting-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.setting-row label { min-width: 90px; font-weight: 700; }
+.setting-note { font-size: 12px; color: #4a5366; margin-top: 4px; min-height: 16px; }
+
+/* Dock (Tiger-style brushed metal shelf with per-app tiles) */
+#dock {
+  background: repeating-linear-gradient(90deg, rgba(255,255,255,.1) 0 1px, rgba(0,0,0,.04) 1px 2px), linear-gradient(rgba(255,255,255,.55), rgba(205,213,225,.45));
+  border-radius: 14px; padding: 6px 12px 10px; align-items: flex-end;
+  border: 1px solid rgba(255,255,255,.7); box-shadow: 0 6px 16px rgba(0,0,0,.35), inset 0 1px 0 #fff;
+}
+.dock-item {
+  width: 52px; height: 52px; text-decoration: none; position: relative; border: 1px solid rgba(0,0,0,.25);
+  text-align: center; line-height: 1.1; padding: 2px; font-size: 10px; display: grid; place-items: center;
+}
+.dock-item span { display: block; }
+.dock-item:hover { transform: translateY(-3px); }
+.dock-item.running::after { content: ""; position: absolute; bottom: -7px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; border-radius: 50%; background: #2a2f3a; }
+.dock-finder { background: linear-gradient(#9ed0ff, #2f7be0 60%, #1d5bb5); }
+.dock-konsol { background: linear-gradient(#5d6878, #1b2230); }
+.dock-notes { background: linear-gradient(#fffdf1, #e8e1b5); color: #3a3520; text-shadow: none; }
+.dock-settings { background: linear-gradient(#d9dee7, #8e97a6); color: #1d2430; text-shadow: none; }
+.dock-collab { background: linear-gradient(#ffb3a8, #c8102e); }
+.dock-item.active { outline: 1px solid rgba(255,255,255,.9); }
+
+/* Home app windows are draggable too; their window-body keeps the Tiger metal feel */
+#home-window .titlebar, #chat-window .titlebar { cursor: move; }

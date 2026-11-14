@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Red Star OS 3.0</title>
+<link rel="stylesheet" href="aqua.css">
+</head>
+<body>
+<div id="stage">
+  <div id="menubar"><span class="apple-mark">&#9733;</span><span data-i18n="finder">Finder</span><span>File</span><span>Edit</span><span>View</span><span>Window</span><span class="clock" id="clock"></span></div>
+
+  <section class="window" id="finder-window" style="left:60px;top:60px;width:620px;height:430px;">
+    <div class="titlebar">
+      <div class="lights"><span class="light close"></span><span class="light minimize"></span><span class="light zoom"></span></div>
+      <div class="title" data-i18n="finder">Finder</div>
+    </div>
+    <div class="metal-toolbar">
+      <div class="pill-group">
+        <button class="pill" id="fz-back" data-i18n="back" aria-label="Back">Back</button>
+        <button class="pill" id="fz-fwd" data-i18n="forward" aria-label="Forward">Forward</button>
+      </div>
+      <div class="seg" role="group">
+        <button id="view-icons" data-i18n="icons" aria-pressed="true">Icons</button>
+        <button id="view-list" data-i18n="list" aria-pressed="false">List</button>
+      </div>
+      <span class="fs-path" id="fs-path"></span>
+    </div>
+    <div class="finder-body">
+      <aside class="sidebar">
+        <div class="side-head" data-i18n="places">Places</div>
+        <ul id="places"></ul>
+      </aside>
+      <div class="fs-main" id="fs-main"></div>
+    </div>
+    <div class="fs-status" id="fs-status"></div>
+  </section>
+
+  <section class="window" id="konsol-window" style="left:140px;top:300px;width:520px;height:300px;display:none;">
+    <div class="titlebar">
+      <div class="lights"><span class="light close"></span><span class="light minimize"></span><span class="light zoom"></span></div>
+      <div class="title" data-i18n="konsol">Terminal</div>
+    </div>
+    <div class="window-body konsol">
+      <pre id="konsol-out"></pre>
+      <div class="konsol-line"><span id="konsol-prompt"></span><input id="konsol-in" class="konsol-input" autocomplete="off" spellcheck="false" data-i18n-ph="prompt" aria-label="Command"></div>
+    </div>
+  </section>
+
+  <section class="window" id="notes-window" style="left:720px;top:90px;width:260px;height:320px;display:none;">
+    <div class="titlebar">
+      <div class="lights"><span class="light close"></span><span class="light minimize"></span><span class="light zoom"></span></div>
+      <div class="title" data-i18n="notes">TextEdit</div>
+    </div>
+    <div class="window-body" style="padding:0;">
+      <textarea id="notes-text" class="notes-text" data-i18n-ph="notesPlaceholder" aria-label="Notes"></textarea>
+    </div>
+  </section>
+
+  <section class="window" id="settings-window" style="left:300px;top:110px;width:400px;height:250px;display:none;">
+    <div class="titlebar">
+      <div class="lights"><span class="light close"></span><span class="light minimize"></span><span class="light zoom"></span></div>
+      <div class="title" data-i18n="settings">Settings</div>
+    </div>
+    <div class="window-body settings">
+      <div class="setting-row">
+        <label for="lang-select" data-i18n="language">Language</label>
+        <select id="lang-select" class="aqua-field" aria-label="Language">
+          <option value="en">English</option>
+          <option value="eo">Esperanto</option>
+          <option value="yz">Yezik</option>
+        </select>
+      </div>
+      <div class="setting-note" data-i18n="langLabel">Interface language</div>
+      <div class="setting-note" id="lang-status"></div>
+    </div>
+  </section>
+
+  <div id="dock">
+    <div class="dock-item dock-finder" data-app="finder-window" title="Finder"><span data-i18n="finder">Finder</span></div>
+    <div class="dock-item dock-konsol" data-app="konsol-window" title="Terminal"><span data-i18n="konsol">Terminal</span></div>
+    <div class="dock-item dock-notes" data-app="notes-window" title="TextEdit"><span data-i18n="notes">TextEdit</span></div>
+    <div class="dock-item dock-settings" data-app="settings-window" title="Settings"><span data-i18n="settings">Settings</span></div>
+    <a class="dock-item dock-collab" href="../home/index.html" title="Collab Room"><span data-i18n="collab">Collab Room</span></a>
+  </div>
+</div>
+<script src="display.js"></script>
+<script src="desktop.js"></script>
+<script src="apps.js"></script>
+</body>
+</html>
