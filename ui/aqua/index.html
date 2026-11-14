@@ -158,10 +158,21 @@
       </div>
     </div>
     <div id="msg-chat" class="msg-drop" style="display:none;flex:1;flex-direction:column;min-height:0;">
+      <div class="msg-cam" id="msg-cam-panel" style="display:none;">
+        <video id="msg-cam-video" autoplay muted playsinline></video>
+        <canvas id="msg-cam-canvas" style="display:none;"></canvas>
+        <div class="msg-cam-bar">
+          <button class="aqua-btn" id="msg-cam-snap">Take Photo</button>
+          <button class="pill" id="msg-cam-cancel">Cancel</button>
+          <span class="msg-cam-msg" id="msg-cam-msg"></span>
+        </div>
+      </div>
       <div class="msg-log" id="msg-log"></div>
       <div class="msg-sendbox">
         <button class="pill msg-clip" id="msg-clip" title="Share a file" aria-label="Share a file">Attach</button>
+        <button class="pill msg-clip" id="msg-cam" title="Take a photo" aria-label="Take a photo">Camera</button>
         <input type="file" id="msg-file" multiple style="display:none">
+        <input type="file" id="msg-cam-file" accept="image/*" capture="environment" style="display:none">
         <textarea id="msg-text" aria-label="Message" placeholder="Type a message"></textarea>
         <button class="aqua-btn" id="msg-send-btn">Send</button>
         <button class="pill" id="msg-disconnect" title="Leave the room">Leave</button>
