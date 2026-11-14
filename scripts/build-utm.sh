@@ -181,14 +181,16 @@ log "apk repositories: $ALPINE_BRANCH main + community"
 log "apk repositories file inside chroot:"
 cat "$MNT/etc/apk/repositories"
 
-step 9 "install Alpine GUI desktop packages in chroot (Xorg, input/video drivers, eudev, openbox, busybox httpd, nodejs, ALSA, ifupdown-ng); no apk cache kept"
+step 9 "install Alpine GUI packages in chroot (Xorg, input/video drivers, eudev, xset, xsetroot, busybox httpd, nodejs, ALSA, ifupdown-ng); no apk cache kept"
 # busybox-extras provides httpd (CGI support for the Finder and Konsol endpoints).
 # ifupdown-ng provides the ifup/ifdown parser that OpenRC's networking service uses to read /etc/network/interfaces.
+# xset (screen blanking and DPMS control) ships as its own package on Alpine.
+# No window manager: Chromium runs as the only X client, and the Aqua page draws its own menu bar, wallpaper and dock.
 chroot "$MNT" /bin/sh -c 'apk update && apk add --no-cache \
   alpine-base linux-lts linux-firmware-none mkinitfs grub grub-efi efibootmgr \
   openrc eudev xorg-server xinit xf86-video-fbdev xf86-video-vesa \
-  xf86-input-libinput xf86-input-evdev xsetroot \
-  openbox font-dejavu nodejs \
+  xf86-input-libinput xf86-input-evdev xset xsetroot \
+  font-dejavu nodejs \
   busybox-extras \
   alsa-utils alsa-lib \
   ifupdown-ng'
@@ -244,14 +246,18 @@ if [ "$(tty)" = "/dev/tty1" ] && [ -z "$DISPLAY" ] && [ -x /usr/bin/xinit ] && [
 fi
 PROFILE
 
-# ~/.xinitrc: serve /opt/homecoffee on 8080, then run the Aqua desktop fullscreen in a browser kiosk on top of openbox.
+# ~/.xinitrc: serve /opt/homecoffee on 8080, then run Chromium kiosk as the only X client (no window manager).
 cat > "$MNT/root/.xinitrc" <<'XINITRC'
 #!/bin/sh
-# ~/.xinitrc for HomeCoffee: openbox window manager, busybox httpd on 8080, Chromium kiosk on the Aqua desktop.
+# ~/.xinitrc for HomeCoffee: no window manager. Chromium kiosk on the Aqua desktop is the only X client.
+
+# Background colour behind the page (the Aqua page draws its own wallpaper).
 xsetroot -solid "#3a6ea5" 2>/dev/null || true
 
-# Window manager runs in the background so kiosk windows get decorations and focus handling.
-openbox >/var/log/hc-openbox.log 2>&1 &
+# Screen settings: no blanking, no DPMS power-down, so the kiosk stays on screen.
+xset s off 2>/dev/null || true
+xset -dpms 2>/dev/null || true
+xset s noblank 2>/dev/null || true
 
 # ALSA: unmute master and PCM outputs at 80% so audio plays on boot.
 amixer sset Master unmute 80% >/dev/null 2>&1 || true
@@ -273,21 +279,30 @@ fi
 # Wait until httpd answers before opening the browser.
 i=0
 while [ $i -lt 30 ]; do
-  wget -q -O /dev/null http://localhost:8080/ui/aqua/index.html 2>/dev/null && break
+  wget -q -O /dev/null http://127.0.0.1:8080/ui/aqua/index.html 2>/dev/null && break
   i=$((i+1)); sleep 1
 done
 
-URL="http://localhost:8080/ui/aqua/index.html?display=ipad8"
+URL="http://127.0.0.1:8080/ui/aqua/index.html?display=ipad8"
 # The build records the installed kiosk browser in /root/.hc-browser: chromium only.
 BROWSER_PKG="$(cat /root/.hc-browser 2>/dev/null || true)"
 case "$BROWSER_PKG" in
   chromium)
-    # Kiosk flags for X11 Chromium running as root in a VM:
+    # Chromium kiosk flags for X11 with no window manager, running as root in a VM.
+    #   --kiosk, --window-position=0,0, --window-size=1024,768: without a WM nothing else sizes the window,
+    #     so position and size are set explicitly to the iPad 8 (1024x768) preset.
     #   --no-sandbox, --disable-dev-shm-usage: root cannot use the setuid sandbox, and /dev/shm is small in the VM.
-    #   --disable-gpu: VGA/fbdev has no GL acceleration, so use software rendering.
-    #   --auto-accept-camera-and-microphone-capture: grants camera and mic permission without a prompt, using the real device.
-    #   --user-data-dir: keeps the kiosk profile separate from any default profile.
-    BROWSER_CMD="chromium --kiosk --no-sandbox --disable-dev-shm-usage --disable-gpu --no-first-run --no-default-browser-check --disable-translate --disable-infobars --autoplay-policy=no-user-gesture-required --auto-accept-camera-and-microphone-capture --password-store=basic --user-data-dir=/root/.config/chromium-kiosk $URL" ;;
+    #   --disable-gpu: VGA/fbdev has no GL acceleration, so Chromium uses its software path.
+    #   --force-device-scale-factor=1: keeps the 1024x768 layout at 1x so the page is not rendered at a larger scale.
+    #   --disable-renderer-backgrounding, --disable-backgrounding-occluded-windows: stop Chromium from throttling
+    #     the kiosk page as if it were hidden, which is what made it stutter.
+    #   --disable-background-networking, --disable-translate, --no-first-run, --no-default-browser-check,
+    #     --disable-infobars: remove background work and first-run UI.
+    #   --autoplay-policy=no-user-gesture-required: allows media to start without a click.
+    #   --auto-accept-camera-and-microphone-capture: grants camera and mic permission using the real device.
+    #   --max-gum-fps=30: caps camera frame delivery at 30 fps so the capture stream does not peg the CPU.
+    #   --password-store=basic, --user-data-dir: keep the kiosk profile separate and skip the keyring.
+    BROWSER_CMD="chromium --kiosk --window-position=0,0 --window-size=1024,768 --no-sandbox --disable-dev-shm-usage --disable-gpu --force-device-scale-factor=1 --disable-renderer-backgrounding --disable-backgrounding-occluded-windows --disable-background-networking --disable-translate --no-first-run --no-default-browser-check --disable-infobars --autoplay-policy=no-user-gesture-required --auto-accept-camera-and-microphone-capture --max-gum-fps=30 --password-store=basic --user-data-dir=/root/.config/chromium-kiosk $URL" ;;
   *)
     echo "no kiosk browser recorded in /root/.hc-browser (got '$BROWSER_PKG')" >>/var/log/hc-browser.log
     exit 1 ;;
