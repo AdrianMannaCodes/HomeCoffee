@@ -170,18 +170,23 @@ mount -t devtmpfs devtmpfs "$MNT/dev" || mount --bind /dev "$MNT/dev" || { echo 
 mkdir -p "$MNT/dev/pts"
 mount -t devpts devpts "$MNT/dev/pts" 2>/dev/null || true
 
-step 9 "install Alpine GUI desktop packages in chroot (Xorg, input/video drivers, eudev, openbox, xterm, nodejs, ALSA); no apk cache kept"
+step 9 "install Alpine GUI desktop packages in chroot (Xorg, input/video drivers, eudev, openbox, browser, busybox httpd, nodejs, ALSA); no apk cache kept"
+# busybox-extras provides httpd (CGI support for the Finder and Konsol endpoints).
+# Browser: midori is preferred; surf is installed as a fallback if midori is not in the Alpine release.
 chroot "$MNT" /bin/sh -c 'apk update && apk add --no-cache \
   alpine-base linux-lts linux-firmware-none mkinitfs grub grub-efi efibootmgr \
   openrc eudev xorg-server xinit xf86-video-fbdev xf86-video-vesa \
   xf86-input-libinput xf86-input-evdev xsetroot \
-  openbox xterm font-dejavu nodejs \
+  openbox font-dejavu nodejs \
+  busybox-extras \
   alsa-utils alsa-lib'
+chroot "$MNT" /bin/sh -c 'apk add --no-cache midori || apk add --no-cache surf || { echo "::error::no lightweight browser (midori/surf) available" >&2; exit 1; }'
 echo homecoffee > "$MNT/etc/hostname"
 
 step 10 "copy HomeCoffee project into image"
 mkdir -p "$MNT/opt/homecoffee"
-cp -r "$REPO/daemon" "$REPO/ui" "$REPO/lang" "$REPO/docs" "$MNT/opt/homecoffee/"
+cp -r "$REPO/daemon" "$REPO/ui" "$REPO/lang" "$REPO/docs" "$REPO/cgi-bin" "$MNT/opt/homecoffee/"
+chmod 0755 "$MNT"/opt/homecoffee/cgi-bin/*.cgi
 
 step 11 "console config: inittab (tty1 autologin root + ttyS0), root .profile starts X on tty1, .xinitrc"
 cat > "$MNT/etc/inittab" <<'INITTAB'
@@ -199,6 +204,9 @@ ttyS0::respawn:/sbin/getty -L 115200 ttyS0 vt100
 ::shutdown:/sbin/openrc shutdown
 INITTAB
 
+# Places used by the Aqua Finder sidebar.
+mkdir -p "$MNT/root/Documents" "$MNT/root/Applications"
+
 # Root profile: on tty1 with no DISPLAY, start the desktop once per boot. Plain shell on any other tty.
 cat > "$MNT/root/.profile" <<'PROFILE'
 # HomeCoffee: auto-start the X desktop on tty1 only.
@@ -209,19 +217,46 @@ if [ "$(tty)" = "/dev/tty1" ] && [ -z "$DISPLAY" ] && [ -x /usr/bin/xinit ] && [
 fi
 PROFILE
 
+# ~/.xinitrc: serve /opt/homecoffee on 8080, then run the Aqua desktop fullscreen in a browser kiosk on top of openbox.
 cat > "$MNT/root/.xinitrc" <<'XINITRC'
 #!/bin/sh
-# ~/.xinitrc for HomeCoffee: openbox desktop plus the HomeCoffee daemon in the background.
+# ~/.xinitrc for HomeCoffee: openbox window manager, busybox httpd on 8080, browser kiosk on the Aqua desktop.
 xsetroot -solid "#3a6ea5" 2>/dev/null || true
-# Open a terminal immediately so the screen is never empty once X boots.
-xterm &
+
+# Window manager runs in the background so kiosk windows get decorations and focus handling.
+openbox >/var/log/hc-openbox.log 2>&1 &
+
 # ALSA: unmute master and PCM outputs at 80% so audio plays on boot.
 amixer sset Master unmute 80% >/dev/null 2>&1 || true
 amixer sset PCM unmute 80% >/dev/null 2>&1 || true
+
+# Static site plus CGI (Finder and Konsol) on port 8080. -h sets the document root; -c is not needed (CGI lives in cgi-bin).
+httpd -p 8080 -h /opt/homecoffee >/var/log/hc-httpd.log 2>&1 &
+
+# HomeCoffee daemon, if present.
 if command -v node >/dev/null 2>&1 && [ -f /opt/homecoffee/daemon/home-collab.js ]; then
   node /opt/homecoffee/daemon/home-collab.js >/var/log/hc-daemon.log 2>&1 &
 fi
-exec openbox
+
+# Wait until httpd answers before opening the browser.
+i=0
+while [ $i -lt 30 ]; do
+  wget -q -O /dev/null http://localhost:8080/ui/aqua/index.html 2>/dev/null && break
+  i=$((i+1)); sleep 1
+done
+
+URL="http://localhost:8080/ui/aqua/index.html?display=ipad8"
+if command -v midori >/dev/null 2>&1; then
+  BROWSER_CMD="midori -e Fullscreen -a $URL"
+else
+  BROWSER_CMD="surf -F $URL"
+fi
+
+# Kiosk loop: if the browser exits, relaunch it so the desktop never goes dark.
+while true; do
+  $BROWSER_CMD >/var/log/hc-browser.log 2>&1
+  sleep 2
+done
 XINITRC
 chmod 0755 "$MNT/root/.xinitrc"
 
