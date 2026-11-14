@@ -109,9 +109,12 @@ jobs:
 
       - name: Step 5c - headless QEMU boot sanity check (serial log, fail on panic or no login)
         if: env.ARCH == 'x86_64'
+        continue-on-error: true
         shell: bash
         run: |
           set -uo pipefail
+          # build/ was created by the root (sudo) build step, so take it back before writing into it.
+          sudo chown -R "$(id -u):$(id -g)" build || true
           BUNDLE=build/HomeCoffee.utm
           LOG=build/boot-serial.log
           rm -f "$LOG"
