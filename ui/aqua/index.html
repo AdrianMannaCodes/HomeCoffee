@@ -3,16 +3,35 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Red Star OS 3.0</title>
+<title>BarOS 10.II Snow Catzebra</title>
 <link rel="stylesheet" href="aqua.css">
 <link rel="stylesheet" href="textedit.css">
 <link rel="stylesheet" href="finder.css">
 <link rel="stylesheet" href="messenger.css">
 <link rel="stylesheet" href="game.css">
+<link rel="stylesheet" href="calculator.css">
+<link rel="stylesheet" href="responsive.css">
 </head>
 <body>
 <div id="stage">
-  <div id="menubar"><span class="apple-mark">&#9733;</span><span data-i18n="finder">Finder</span><span>File</span><span>Edit</span><span>View</span><span>Window</span><span class="clock" id="clock"></span></div>
+  <div id="menubar">
+    <span class="bar-logo" id="bar-logo" title="About BarOS" onclick="RedStarWM.show(document.getElementById('about-window'))"><svg width="18" height="13" viewBox="0 0 54 39" aria-hidden="true"><rect x="1" y="5" width="16" height="29" rx="4" fill="#3d8bfd"/><rect x="19" y="5" width="16" height="29" rx="4" fill="#f5c518"/><rect x="37" y="5" width="16" height="29" rx="4" fill="#ff7a1a"/></svg></span>
+    <span>File</span><span>Edit</span><span>View</span><span>Go</span><span>Window</span><span>Help</span>
+    <span class="clock" id="clock"></span>
+  </div>
+
+  <section class="window" id="about-window">
+    <div class="titlebar">
+      <div class="lights"><span class="light close"></span><span class="light minimize"></span><span class="light zoom"></span></div>
+      <div class="title">About BarOS</div>
+    </div>
+    <div class="about-body">
+      <svg class="about-logo" width="64" height="48" viewBox="0 0 54 39" aria-hidden="true"><rect x="1" y="5" width="16" height="29" rx="4" fill="#3d8bfd"/><rect x="19" y="5" width="16" height="29" rx="4" fill="#f5c518"/><rect x="37" y="5" width="16" height="29" rx="4" fill="#ff7a1a"/></svg>
+      <div class="about-title">BarOS 10.II Snow Catzebra</div>
+      <div class="about-line">Build 10A2148</div>
+      <div class="about-sub">Alpine Linux utility OS</div>
+    </div>
+  </section>
 
   <section class="window" id="finder-window" style="left:60px;top:60px;width:620px;height:430px;">
     <div class="titlebar">
@@ -131,7 +150,6 @@
         <select id="lang-select" class="aqua-field" aria-label="Language">
           <option value="en">English</option>
           <option value="eo">Esperanto</option>
-          <option value="yz">Yezik</option>
         </select>
       </div>
       <div class="setting-note" data-i18n="langLabel">Interface language</div>
@@ -142,7 +160,7 @@
   <section class="window" id="messenger-window" style="left:420px;top:90px;width:460px;height:480px;display:none;">
     <div class="titlebar">
       <div class="lights"><span class="light close"></span><span class="light minimize"></span><span class="light zoom"></span></div>
-      <div class="title">Messenger</div>
+      <div class="title">PBook</div>
     </div>
     <div class="msg-head">
       <span class="msg-brand">Home Collab</span>
@@ -204,13 +222,37 @@
     </div>
   </section>
 
+  <section class="window" id="calc-window">
+    <div class="titlebar">
+      <div class="lights"><span class="light close"></span><span class="light minimize"></span><span class="light zoom"></span></div>
+      <div class="title">Calculator</div>
+    </div>
+    <div class="calc-body">
+      <div class="calc-display" id="calc-display" aria-live="polite">0</div>
+      <div class="calc-keys" id="calc-keys"></div>
+    </div>
+  </section>
+
+  <section class="window" id="trash-window">
+    <div class="titlebar">
+      <div class="lights"><span class="light close"></span><span class="light minimize"></span><span class="light zoom"></span></div>
+      <div class="title">Trash</div>
+    </div>
+    <div class="trash-body">
+      <div>Trash is empty.</div>
+      <div class="trash-note">Trash is a placeholder. Items deleted in Finder are not moved here yet.</div>
+    </div>
+  </section>
+
   <div id="dock">
     <div class="dock-item dock-finder" data-app="finder-window" title="Finder"><span data-i18n="finder">Finder</span></div>
     <div class="dock-item dock-konsol" data-app="konsol-window" title="Terminal"><span data-i18n="konsol">Terminal</span></div>
     <div class="dock-item dock-notes" data-app="notes-window" title="TextEdit"><span data-i18n="notes">TextEdit</span></div>
-    <div class="dock-item dock-messenger" data-app="messenger-window" title="Messenger"><span>Messenger</span></div>
+    <div class="dock-item dock-messenger" data-app="messenger-window" title="PBook"><span>PBook</span></div>
     <div class="dock-item dock-game" data-app="game-window" title="Progressbar"><span>Progressbar</span></div>
+    <div class="dock-item dock-calc" data-app="calc-window" title="Calculator"><span>Calculator</span></div>
     <div class="dock-item dock-settings" data-app="settings-window" title="Settings"><span data-i18n="settings">Settings</span></div>
+    <div class="dock-item dock-trash" data-app="trash-window" title="Trash"><span>Trash</span></div>
     <a class="dock-item dock-collab" href="../home/index.html" title="Collab Room"><span data-i18n="collab">Collab Room</span></a>
   </div>
 </div>
@@ -219,5 +261,6 @@
 <script src="apps.js"></script>
 <script src="messenger.js"></script>
 <script src="game.js"></script>
+<script src="calculator.js"></script>
 </body>
 </html>

@@ -16,12 +16,13 @@
   }
   var q = new URLSearchParams(location.search);
   apply(q.get('display') || bestPreset(viewport()), q.get('fit') || 'fit');
-  window.addEventListener('resize', function () { apply(root.getAttribute('data-preset'), q.get('fit') || 'fit'); });
+  // Rotation or resize: re-pick the preset for the new orientation unless ?display= pins one.
+  window.addEventListener('resize', function () { apply(q.get('display') || bestPreset(viewport()), q.get('fit') || 'fit'); });
   window.RedStarDisplay = { apply: apply, presets: PRESETS };
 })();
 
 // Window manager: drag by titlebar, focus stacking, close and minimize via the traffic lights, and dock toggling.
-// Works on every .window in the stage (Finder, Konsol, Notes, Settings, and the Home app windows).
+// Works on every .window in the stage (Finder, Konsol, Notes, Settings, PBook, Progressbar, Calculator, Trash, About).
 (function () {
   var stage = document.getElementById('stage');
   if (!stage) return;

@@ -1,0 +1,18 @@
+/* Calculator window and dock tile. Loaded after aqua.css. */
+#calc-window { left: 520px; top: 330px; width: 250px; height: 330px; display: none; }
+.calc-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 12px; background: #dfe6f0; }
+.calc-display { background: #ffffff; border: 1px solid #7b8698; box-shadow: inset 0 1px 2px rgba(0,0,0,.2); border-radius: 6px; padding: 8px 10px; font-family: Monaco, Menlo, "DejaVu Sans Mono", monospace; font-size: 26px; text-align: right; overflow: hidden; white-space: nowrap; min-height: 44px; color: #1d2430; }
+.calc-keys { flex: 1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.calc-key { font: inherit; font-size: 17px; font-weight: 700; border-radius: 999px; border: 1px solid #7a8396; cursor: pointer; padding: 0; color: #1d2430; background: linear-gradient(#ffffff, #e2e7ef 50%, #cfd6e2 52%, #e9edf4); box-shadow: 0 1px 2px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.7); }
+.calc-key:hover { filter: brightness(1.04); }
+.calc-key:active { filter: brightness(0.92); }
+.calc-key.calc-fn { background: linear-gradient(#f4f6fa, #c9d0dc); }
+.calc-key.calc-op { color: #fff; text-shadow: 0 -1px 0 rgba(0,0,0,.35); border-color: #1f5fb5; background: linear-gradient(#b9dcff 0%, #5aa6fb 48%, #2f7be0 52%, #5ea9f7 100%); }
+.calc-key.calc-zero { grid-column: span 2; border-radius: 999px; text-align: left; padding-left: 22px; }
+.calc-key { min-height: 36px; }
+.dock-calc { background: linear-gradient(#d9dee7, #5d6878); color: #fff; }
+.dock-trash { background: linear-gradient(#e9ecf1, #8e97a6); color: #1d2430; text-shadow: none; }
+
+#trash-window { left: 560px; top: 90px; width: 300px; height: 200px; display: none; }
+.trash-body { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 12px; text-align: center; background: #fbfcfe; font-size: 13px; }
+.trash-body .trash-note { font-size: 12px; color: #4a5366; }

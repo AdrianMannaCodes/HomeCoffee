@@ -1,11 +1,12 @@
 // Dynamic resolution and aspect-ratio controller for the Aqua desktop.
-// Pure functions (no DOM) so they can be tested. Presets cover iPad 8 (4:3) and Mac mini (16:9, 16:10).
+// Pure functions (no DOM) so they can be tested. Presets cover iPad 8 landscape and portrait (4:3, 3:4), and Mac mini (16:9, 16:10).
 'use strict';
 var PRESETS = {
-  ipad8:   { label: 'iPad 8 (4:3)',      width: 1024, height: 768,  ratio: '4:3' },
-  ipad8r:  { label: 'iPad 8 Retina 2x',  width: 2048, height: 1536, ratio: '4:3' },
-  mac169:  { label: 'Mac mini (16:9)',   width: 1920, height: 1080, ratio: '16:9' },
-  mac1610: { label: 'Mac mini (16:10)',  width: 1680, height: 1050, ratio: '16:10' },
+  ipad8:   { label: 'iPad 8 (4:3)',           width: 1024, height: 768,  ratio: '4:3' },
+  ipad8p:  { label: 'iPad 8 Portrait (3:4)',  width: 768,  height: 1024, ratio: '3:4' },
+  ipad8r:  { label: 'iPad 8 Retina 2x',       width: 2048, height: 1536, ratio: '4:3' },
+  mac169:  { label: 'Mac mini (16:9)',        width: 1920, height: 1080, ratio: '16:9' },
+  mac1610: { label: 'Mac mini (16:10)',       width: 1680, height: 1050, ratio: '16:10' },
 };
 
 // Returns the layout that fits (or fills) the source logical size into the viewport, preserving aspect ratio.
@@ -38,7 +39,7 @@ function ratioOf(w, h) {
   return (w / g) + ':' + (h / g);
 }
 
-// Choose the preset whose aspect ratio is closest to the viewport.
+// Choose the preset whose aspect ratio is closest to the viewport (portrait viewports get the portrait preset).
 function bestPreset(viewport) {
   var target = viewport.width / viewport.height;
   var best = null, bestDiff = Infinity;
