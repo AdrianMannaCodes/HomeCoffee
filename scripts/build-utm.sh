@@ -193,30 +193,21 @@ chroot "$MNT" /bin/sh -c 'apk update && apk add --no-cache \
   alsa-utils alsa-lib \
   ifupdown-ng'
 
-# Kiosk browser: Midori first, then Surf. Before trying, log the repo state and what apk can see, so a failed
-# install shows the cause in the build log. A candidate only counts when its binary is actually present in the image.
+# Kiosk browser: Alpine's chromium package. Log what apk can see first, then install and verify the binary is in the image.
 chroot "$MNT" /bin/sh -c 'apk update' || log 'warning: apk update failed before browser install'
-log "apk package search for browser candidates (diagnostic):"
-chroot "$MNT" /bin/sh -c 'apk search -v midori surf' || log 'warning: apk search returned no matches for midori or surf'
-BROWSER_PKG=""
-for pkg in midori surf; do
-  log "apk add $pkg (candidate browser)"
-  if chroot "$MNT" /bin/sh -c "apk add --no-cache $pkg"; then
-    if chroot "$MNT" /bin/sh -c "command -v $pkg" >/dev/null 2>&1; then
-      BROWSER_PKG="$pkg"
-      log "browser installed and verified: $pkg"
-      break
-    fi
-    log "apk reported success for $pkg but the binary is missing"
-  else
-    log "apk add $pkg failed"
-  fi
-done
-if [ -z "$BROWSER_PKG" ]; then
-  echo '::error::neither midori nor surf could be installed from Alpine' >&2
+log "apk package search for chromium (diagnostic):"
+chroot "$MNT" /bin/sh -c 'apk search -v chromium' || log 'warning: apk search returned no matches for chromium'
+log "apk add chromium"
+if ! chroot "$MNT" /bin/sh -c 'apk add --no-cache chromium'; then
+  echo '::error::apk add chromium failed' >&2
   exit 1
 fi
-echo "$BROWSER_PKG" > "$MNT/root/.hc-browser"
+if ! chroot "$MNT" /bin/sh -c 'command -v chromium' >/dev/null 2>&1; then
+  echo '::error::chromium binary not found in image after apk add' >&2
+  exit 1
+fi
+log "browser installed and verified: chromium"
+echo chromium > "$MNT/root/.hc-browser"
 echo homecoffee > "$MNT/etc/hostname"
 
 step 10 "copy HomeCoffee project into image"
@@ -256,7 +247,7 @@ PROFILE
 # ~/.xinitrc: serve /opt/homecoffee on 8080, then run the Aqua desktop fullscreen in a browser kiosk on top of openbox.
 cat > "$MNT/root/.xinitrc" <<'XINITRC'
 #!/bin/sh
-# ~/.xinitrc for HomeCoffee: openbox window manager, busybox httpd on 8080, browser kiosk on the Aqua desktop.
+# ~/.xinitrc for HomeCoffee: openbox window manager, busybox httpd on 8080, Chromium kiosk on the Aqua desktop.
 xsetroot -solid "#3a6ea5" 2>/dev/null || true
 
 # Window manager runs in the background so kiosk windows get decorations and focus handling.
@@ -287,11 +278,16 @@ while [ $i -lt 30 ]; do
 done
 
 URL="http://localhost:8080/ui/aqua/index.html?display=ipad8"
-# The build records the installed kiosk browser in /root/.hc-browser: midori or surf only.
+# The build records the installed kiosk browser in /root/.hc-browser: chromium only.
 BROWSER_PKG="$(cat /root/.hc-browser 2>/dev/null || true)"
 case "$BROWSER_PKG" in
-  midori) BROWSER_CMD="midori -e Fullscreen -a $URL" ;;
-  surf) BROWSER_CMD="surf -F $URL" ;;
+  chromium)
+    # Kiosk flags for X11 Chromium running as root in a VM:
+    #   --no-sandbox, --disable-dev-shm-usage: root cannot use the setuid sandbox, and /dev/shm is small in the VM.
+    #   --disable-gpu: VGA/fbdev has no GL acceleration, so use software rendering.
+    #   --auto-accept-camera-and-microphone-capture: grants camera and mic permission without a prompt, using the real device.
+    #   --user-data-dir: keeps the kiosk profile separate from any default profile.
+    BROWSER_CMD="chromium --kiosk --no-sandbox --disable-dev-shm-usage --disable-gpu --no-first-run --no-default-browser-check --disable-translate --disable-infobars --autoplay-policy=no-user-gesture-required --auto-accept-camera-and-microphone-capture --password-store=basic --user-data-dir=/root/.config/chromium-kiosk $URL" ;;
   *)
     echo "no kiosk browser recorded in /root/.hc-browser (got '$BROWSER_PKG')" >>/var/log/hc-browser.log
     exit 1 ;;
