@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="aqua.css">
 <link rel="stylesheet" href="textedit.css">
 <link rel="stylesheet" href="finder.css">
+<link rel="stylesheet" href="messenger.css">
 </head>
 <body>
 <div id="stage">
@@ -137,10 +138,42 @@
     </div>
   </section>
 
+  <section class="window" id="messenger-window" style="left:420px;top:90px;width:460px;height:480px;display:none;">
+    <div class="titlebar">
+      <div class="lights"><span class="light close"></span><span class="light minimize"></span><span class="light zoom"></span></div>
+      <div class="title">Messenger</div>
+    </div>
+    <div class="msg-head">
+      <span class="msg-brand">Home Collab</span>
+      <span class="msg-status off" id="msg-status">Not connected</span>
+    </div>
+    <div class="window-body" id="msg-connect" style="display:none;">
+      <div class="msg-connect">
+        <label>Room address (host)<input id="msg-host" class="aqua-field" autocomplete="off" spellcheck="false"></label>
+        <label>Port<input id="msg-port" class="aqua-field" inputmode="numeric" autocomplete="off"></label>
+        <label>PIN (4 digits)<input id="msg-pin" class="aqua-field" inputmode="numeric" maxlength="4" autocomplete="off"></label>
+        <label>Nickname<input id="msg-nick" class="aqua-field" maxlength="32" autocomplete="off"></label>
+        <div class="row"><button class="aqua-btn" id="msg-connect-btn">Connect</button></div>
+        <div class="msg-error" id="msg-error"></div>
+      </div>
+    </div>
+    <div id="msg-chat" class="msg-drop" style="display:none;flex:1;flex-direction:column;min-height:0;">
+      <div class="msg-log" id="msg-log"></div>
+      <div class="msg-sendbox">
+        <button class="pill msg-clip" id="msg-clip" title="Share a file" aria-label="Share a file">Attach</button>
+        <input type="file" id="msg-file" multiple style="display:none">
+        <textarea id="msg-text" aria-label="Message" placeholder="Type a message"></textarea>
+        <button class="aqua-btn" id="msg-send-btn">Send</button>
+        <button class="pill" id="msg-disconnect" title="Leave the room">Leave</button>
+      </div>
+    </div>
+  </section>
+
   <div id="dock">
     <div class="dock-item dock-finder" data-app="finder-window" title="Finder"><span data-i18n="finder">Finder</span></div>
     <div class="dock-item dock-konsol" data-app="konsol-window" title="Terminal"><span data-i18n="konsol">Terminal</span></div>
     <div class="dock-item dock-notes" data-app="notes-window" title="TextEdit"><span data-i18n="notes">TextEdit</span></div>
+    <div class="dock-item dock-messenger" data-app="messenger-window" title="Messenger"><span>Messenger</span></div>
     <div class="dock-item dock-settings" data-app="settings-window" title="Settings"><span data-i18n="settings">Settings</span></div>
     <a class="dock-item dock-collab" href="../home/index.html" title="Collab Room"><span data-i18n="collab">Collab Room</span></a>
   </div>
@@ -148,5 +181,6 @@
 <script src="display.js"></script>
 <script src="desktop.js"></script>
 <script src="apps.js"></script>
+<script src="messenger.js"></script>
 </body>
 </html>
