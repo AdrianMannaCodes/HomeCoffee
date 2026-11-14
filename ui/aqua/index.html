@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Red Star OS 3.0</title>
 <link rel="stylesheet" href="aqua.css">
+<link rel="stylesheet" href="textedit.css">
 </head>
 <body>
 <div id="stage">
@@ -47,14 +48,65 @@
     </div>
   </section>
 
-  <section class="window" id="notes-window" style="left:720px;top:90px;width:260px;height:320px;display:none;">
+  <section class="window" id="notes-window" style="left:300px;top:70px;width:600px;height:440px;display:none;">
     <div class="titlebar">
       <div class="lights"><span class="light close"></span><span class="light minimize"></span><span class="light zoom"></span></div>
       <div class="title" data-i18n="notes">TextEdit</div>
     </div>
-    <div class="window-body" style="padding:0;">
-      <textarea id="notes-text" class="notes-text" data-i18n-ph="notesPlaceholder" aria-label="Notes"></textarea>
+    <div class="metal-toolbar te-toolbar" role="toolbar" aria-label="Format">
+      <div class="pill-group">
+        <button class="pill" id="te-new" aria-label="New">New</button>
+        <button class="pill" id="te-open" aria-label="Open">Open</button>
+      </div>
+      <div class="pill-group">
+        <button class="pill" id="te-save" aria-label="Save">Save</button>
+        <button class="pill" id="te-saveas" aria-label="Save As">Save As...</button>
+      </div>
+      <select id="te-font" class="aqua-field te-select" aria-label="Font">
+        <option value="Courier New">Courier</option>
+        <option value="Helvetica">Helvetica</option>
+        <option value="Times New Roman" selected>Times</option>
+        <option value="Monaco">Monaco</option>
+      </select>
+      <select id="te-size" class="aqua-field te-select" aria-label="Font size">
+        <option value="10">10</option>
+        <option value="12">12</option>
+        <option value="14" selected>14</option>
+        <option value="18">18</option>
+        <option value="24">24</option>
+        <option value="36">36</option>
+      </select>
+      <div class="pill-group">
+        <button class="pill" data-te-cmd="bold" aria-label="Bold" title="Bold"><b>B</b></button>
+        <button class="pill" data-te-cmd="italic" aria-label="Italic" title="Italic"><i>I</i></button>
+        <button class="pill" data-te-cmd="underline" aria-label="Underline" title="Underline"><u>U</u></button>
+        <button class="pill" data-te-cmd="strikeThrough" aria-label="Strikethrough" title="Strikethrough"><s>S</s></button>
+      </div>
+      <label class="te-color" title="Text color">A <input type="color" id="te-fore" value="#000000" aria-label="Text color"></label>
+      <label class="te-color" title="Highlight color">Hi <input type="color" id="te-hilite" value="#ffff00" aria-label="Highlight color"></label>
+      <div class="pill-group">
+        <button class="pill" data-te-cmd="justifyLeft" aria-label="Align left" title="Align left">L</button>
+        <button class="pill" data-te-cmd="justifyCenter" aria-label="Center" title="Center">C</button>
+        <button class="pill" data-te-cmd="justifyRight" aria-label="Align right" title="Align right">R</button>
+        <button class="pill" data-te-cmd="justifyFull" aria-label="Justify" title="Justify">J</button>
+      </div>
+      <div class="pill-group">
+        <button class="pill" data-te-cmd="insertUnorderedList" aria-label="Bullet list" title="Bullet list">&bull; List</button>
+        <button class="pill" data-te-cmd="insertOrderedList" aria-label="Numbered list" title="Numbered list">1. List</button>
+      </div>
+      <div class="pill-group">
+        <button class="pill" data-te-cmd="formatBlock" data-te-val="blockquote" aria-label="Blockquote" title="Blockquote">Quote</button>
+        <button class="pill" data-te-cmd="insertHorizontalRule" aria-label="Horizontal rule" title="Horizontal rule">Rule</button>
+      </div>
+      <div class="pill-group">
+        <button class="pill" id="te-preview" aria-label="Export preview" aria-pressed="false">Preview</button>
+        <button class="pill" id="te-print" aria-label="Print">Print</button>
+      </div>
     </div>
+    <div class="window-body te-body" style="padding:0;">
+      <div id="notes-text" class="notes-text" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Document" spellcheck="true" data-placeholder="Type your notes here..."></div>
+    </div>
+    <div class="fs-status te-status"><span id="te-counts"></span><span id="te-msg"></span></div>
   </section>
 
   <section class="window" id="settings-window" style="left:300px;top:110px;width:400px;height:250px;display:none;">
