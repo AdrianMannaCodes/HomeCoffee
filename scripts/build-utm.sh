@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Builds HomeCoffee.utm: an Alpine-based raw disk image (EFI + root) with the full GUI desktop, plus UTM config.
+# Builds BarOS-10.II.utm: an Alpine-based raw disk image (EFI + root) with the full GUI desktop, plus UTM config.
 # Must run as root (sudo) on a Linux host. Env: ARCH (x86_64|aarch64, default x86_64), DISK_GB (default 2).
-# Output: build/HomeCoffee.utm/{config.plist,Data/disk.img} (unzipped bundle folder).
+# Output: build/BarOS-10.II.utm/{config.plist,Data/disk.img} (unzipped bundle folder).
 # config.plist follows UTM's Configuration/*.swift decoders (ConfigurationVersion 4, singular Display/Drive/Network keys).
 # qemu-user emulation is only used when ARCH differs from the host (never for x86_64 on an x86_64 runner).
 set -eEuxo pipefail
@@ -10,7 +10,7 @@ ARCH="${ARCH:-x86_64}"
 DISK_GB="${DISK_GB:-2}"
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD="$REPO/build"
-BUNDLE="$BUILD/HomeCoffee.utm"
+BUNDLE="$BUILD/BarOS-10.II.utm"
 IMG="$BUILD/disk.img"
 MNT="$BUILD/mnt"
 LOOP=""
@@ -182,7 +182,7 @@ log "apk repositories file inside chroot:"
 cat "$MNT/etc/apk/repositories"
 
 step 9 "install Alpine GUI packages in chroot (Xorg, input/video drivers, eudev, xset, xsetroot, busybox httpd, nodejs, ALSA, ifupdown-ng); no apk cache kept"
-# busybox-extras provides httpd (CGI support for the Finder and Konsol endpoints).
+# busybox-extras provides httpd (CGI support for the Finder and Terminal endpoints).
 # ifupdown-ng provides the ifup/ifdown parser that OpenRC's networking service uses to read /etc/network/interfaces.
 # xset (screen blanking and DPMS control) ships as its own package on Alpine.
 # No window manager: Chromium runs as the only X client, and the Aqua page draws its own menu bar, wallpaper and dock.
@@ -210,16 +210,16 @@ if ! chroot "$MNT" /bin/sh -c 'command -v chromium' >/dev/null 2>&1; then
 fi
 log "browser installed and verified: chromium"
 echo chromium > "$MNT/root/.hc-browser"
-echo homecoffee > "$MNT/etc/hostname"
+echo baros > "$MNT/etc/hostname"
 
-step 10 "copy HomeCoffee project into image"
+step 10 "copy BarOS project into image"
 mkdir -p "$MNT/opt/homecoffee"
 cp -r "$REPO/daemon" "$REPO/ui" "$REPO/lang" "$REPO/docs" "$REPO/cgi-bin" "$MNT/opt/homecoffee/"
 chmod 0755 "$MNT"/opt/homecoffee/cgi-bin/*.cgi
 
 step 11 "console config: inittab (tty1 autologin root + ttyS0), root .profile starts X on tty1, .xinitrc"
 cat > "$MNT/etc/inittab" <<'INITTAB'
-# /etc/inittab for HomeCoffee (written by scripts/build-utm.sh)
+# /etc/inittab for BarOS 10.II (written by scripts/build-utm.sh)
 ::sysinit:/sbin/openrc sysinit
 ::sysinit:/sbin/openrc boot
 ::wait:/sbin/openrc default
@@ -238,7 +238,7 @@ mkdir -p "$MNT/root/Documents" "$MNT/root/Applications"
 
 # Root profile: on tty1 with no DISPLAY, start the desktop once per boot. Plain shell on any other tty.
 cat > "$MNT/root/.profile" <<'PROFILE'
-# HomeCoffee: auto-start the X desktop on tty1 only.
+# BarOS 10.II: auto-start the X desktop on tty1 only.
 if [ "$(tty)" = "/dev/tty1" ] && [ -z "$DISPLAY" ] && [ -x /usr/bin/xinit ] && [ ! -f /tmp/.hc-x-started ]; then
   touch /tmp/.hc-x-started
   /usr/bin/xinit /root/.xinitrc -- :0 vt1 >/var/log/hc-xinit.log 2>&1
@@ -249,7 +249,7 @@ PROFILE
 # ~/.xinitrc: serve /opt/homecoffee on 8080, then run Chromium kiosk as the only X client (no window manager).
 cat > "$MNT/root/.xinitrc" <<'XINITRC'
 #!/bin/sh
-# ~/.xinitrc for HomeCoffee: no window manager. Chromium kiosk on the Aqua desktop is the only X client.
+# ~/.xinitrc for BarOS 10.II: no window manager. Chromium kiosk on the Aqua desktop is the only X client.
 
 # Background colour behind the page (the Aqua page draws its own wallpaper).
 xsetroot -solid "#3a6ea5" 2>/dev/null || true
@@ -263,15 +263,15 @@ xset s noblank 2>/dev/null || true
 amixer sset Master unmute 80% >/dev/null 2>&1 || true
 amixer sset PCM unmute 80% >/dev/null 2>&1 || true
 
-# Static site plus CGI (Finder and Konsol) on port 8080. -h sets the document root.
+# Static site plus CGI (Finder and Terminal) on port 8080. -h sets the document root.
 httpd -p 8080 -h /opt/homecoffee >/var/log/hc-httpd.log 2>&1 &
 
-# HomeCoffee daemon, if present.
+# BarOS daemon, if present.
 if command -v node >/dev/null 2>&1 && [ -f /opt/homecoffee/daemon/home-collab.js ]; then
   node /opt/homecoffee/daemon/home-collab.js >/var/log/hc-daemon.log 2>&1 &
 fi
 
-# Collab bridge: localhost relay (127.0.0.1:7421) used by the Aqua Messenger window, if present.
+# Collab bridge: localhost relay (127.0.0.1:7421) used by the PBook window, if present.
 if command -v node >/dev/null 2>&1 && [ -f /opt/homecoffee/daemon/collab-bridge.js ]; then
   node /opt/homecoffee/daemon/collab-bridge.js >/var/log/hc-bridge.log 2>&1 &
 fi
@@ -323,7 +323,7 @@ cat > "$MNT/etc/default/grub" <<GRUBDEF
 GRUB_DEFAULT=0
 GRUB_TIMEOUT=3
 GRUB_TIMEOUT_STYLE=menu
-GRUB_DISTRIBUTOR="HomeCoffee"
+GRUB_DISTRIBUTOR="BarOS 10.II"
 GRUB_CMDLINE_LINUX_DEFAULT="root=$ROOT_DEV rootfstype=ext4 rw console=tty0 console=ttyS0,115200"
 GRUB_CMDLINE_LINUX=""
 GRUB_TERMINAL="console serial"
@@ -411,7 +411,7 @@ cat > "$BUNDLE/config.plist" <<PLIST
   <key>Backend</key><string>QEMU</string>
   <key>Information</key>
   <dict>
-    <key>Name</key><string>HomeCoffee</string>
+    <key>Name</key><string>BarOS 10.II</string>
     <key>UUID</key><string>6F1C2A9E-3B7D-4E21-9C55-52ED5A0A1234</string>
     <key>IconCustom</key><false/>
   </dict>
