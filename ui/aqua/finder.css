@@ -1,0 +1,10 @@
+/* Finder file management: selection, drop zone, action bar. */
+.fs-main { position: relative; }
+.fs-main.fs-drop { outline: 2px dashed #3a6ea5; outline-offset: -6px; background: rgba(58, 110, 165, 0.08); }
+.fs-selected { background: #3a6ea5; color: #ffffff; border-radius: 4px; }
+.fs-selected .fs-name { color: #ffffff; }
+.fs-list .fs-row { cursor: default; }
+.fs-list .fs-row.fs-selected td { color: #ffffff; }
+.fs-empty { padding: 24px; color: #5f6a80; text-align: center; font-size: 13px; }
+.metal-toolbar .pill-group + .pill-group { margin-left: 4px; }
+.metal-toolbar .pill:disabled { opacity: 0.45; cursor: default; }
