@@ -1,0 +1,34 @@
+/* Bin: dock pet and window. Frosted shelf style, glossy icon, animated chew and wiggle. */
+.dock-bin { position: relative; }
+.bin-dock-icon { width: 56px; height: 56px; margin: 0 auto; filter: drop-shadow(0 3px 4px rgba(0,0,0,0.35)); transition: transform 0.2s; }
+.bin-dock-icon svg { width: 100%; height: 100%; display: block; }
+.bin-dock-icon.bounce { animation: bin-bounce 0.6s ease; }
+.bin-dock-icon.wiggle { animation: bin-wiggle 0.6s ease; }
+.dock-bin:hover .bin-dock-icon { transform: translateY(-3px) scale(1.06); }
+.dock-bin.drop-over .bin-dock-icon { transform: scale(1.15); filter: drop-shadow(0 0 8px #9fd3ff); }
+@keyframes bin-bounce { 0%,100% { transform: translateY(0); } 40% { transform: translateY(-8px); } 70% { transform: translateY(-2px); } }
+@keyframes bin-wiggle { 0%,100% { transform: rotate(0); } 25% { transform: rotate(-8deg); } 75% { transform: rotate(8deg); } }
+.dock-bin .bin-bubble {
+  position: absolute; left: 50%; bottom: 100%; transform: translate(-50%, -6px); opacity: 0; pointer-events: none;
+  background: linear-gradient(#ffffff, #dfe6f0); color: #1f2a3a; border: 1px solid #7d8aa0; border-radius: 12px;
+  padding: 5px 9px; font: 11px "Lucida Grande", system-ui, sans-serif; white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis;
+  transition: opacity 0.2s;
+}
+.dock-bin .bin-bubble.show { opacity: 1; }
+.bin-window { border-radius: 9px; overflow: hidden; background: linear-gradient(90deg, #d9dee6 0, #eef1f6 2px, #d9dee6 4px), #dfe4ec; }
+.bin-body { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px; font: 12px "Lucida Grande", system-ui, sans-serif; color: #1f2a3a; }
+.bin-stage { position: relative; width: 150px; height: 150px; display: flex; align-items: center; justify-content: center; }
+.bin-art { width: 130px; height: 130px; cursor: pointer; transition: transform 0.15s; }
+.bin-art svg { width: 100%; height: 100%; display: block; }
+.bin-art:hover { transform: scale(1.04); }
+.bin-stage .bin-bubble { position: absolute; left: 50%; top: 0; bottom: auto; transform: translate(-50%, 0); opacity: 0; pointer-events: none; background: linear-gradient(#ffffff, #dfe6f0); border: 1px solid #7d8aa0; border-radius: 12px; padding: 5px 9px; font: 11px "Lucida Grande", system-ui, sans-serif; white-space: nowrap; transition: opacity 0.2s; }
+.bin-stage .bin-bubble.show { opacity: 1; }
+.bin-meter-label { font-weight: 600; }
+.bin-meter { width: 220px; height: 12px; border-radius: 999px; border: 1px solid #6f7d92; background: linear-gradient(#d4dbe6, #eef2f8); overflow: hidden; box-shadow: inset 0 1px 2px rgba(0,0,0,0.25); }
+.bin-meter-fill { height: 100%; background: linear-gradient(#b6f0a8, #3fb33a); transition: width 0.4s; }
+.bin-btns { display: flex; gap: 8px; }
+.bin-stats { font-size: 11px; color: #4a5668; text-align: center; min-height: 28px; }
+.bin-tip { font-size: 10px; color: #5a6578; text-align: center; }
+.bin-menu { position: absolute; z-index: 9999; display: none; background: linear-gradient(#ffffff, #dfe6f0); border: 1px solid #7d8aa0; border-radius: 8px; padding: 4px; min-width: 150px; box-shadow: 0 6px 16px rgba(0,0,0,0.3); }
+.bin-menu button { display: block; width: 100%; text-align: left; font: 12px "Lucida Grande", system-ui, sans-serif; padding: 4px 10px; border: 0; background: transparent; border-radius: 4px; cursor: pointer; }
+.bin-menu button:hover { background: linear-gradient(#6fb1ff, #2f6fd0); color: #fff; }
