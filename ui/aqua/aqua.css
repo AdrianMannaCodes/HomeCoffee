@@ -137,15 +137,21 @@ body {
 .setting-row label { min-width: 90px; font-weight: 700; }
 .setting-note { font-size: 12px; color: #4a5366; margin-top: 4px; min-height: 16px; }
 
-/* Dock (Tiger-style brushed metal shelf with per-app tiles) */
+/* Dock (Tiger-style brushed metal shelf with per-app tiles).
+   z-index: above application windows (which start at 100 in desktop.js) but below the menubar (1000),
+   so windows cannot cover the dock and the dock never covers the menubar. */
 #dock {
   background: repeating-linear-gradient(90deg, rgba(255,255,255,.1) 0 1px, rgba(0,0,0,.04) 1px 2px), linear-gradient(rgba(255,255,255,.55), rgba(205,213,225,.45));
   border-radius: 14px; padding: 6px 12px 10px; align-items: flex-end;
   border: 1px solid rgba(255,255,255,.7); box-shadow: 0 6px 16px rgba(0,0,0,.35), inset 0 1px 0 #fff;
+  z-index: 900; max-width: calc(100% - 16px); flex-wrap: nowrap;
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  transform: translateX(-50%); backface-visibility: hidden;
 }
 .dock-item {
   width: 52px; height: 52px; text-decoration: none; position: relative; border: 1px solid rgba(0,0,0,.25);
   text-align: center; line-height: 1.1; padding: 2px; font-size: 10px; display: grid; place-items: center;
+  flex: 0 0 auto;
 }
 .dock-item span { display: block; }
 .dock-item:hover { transform: translateY(-3px); }
