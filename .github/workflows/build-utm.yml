@@ -50,8 +50,9 @@ jobs:
           echo "[workflow] apt-get update"
           apt_retry update || { echo '::error::apt-get update failed'; exit 1; }
           echo "[workflow] installing disk/filesystem tools"
-          apt_retry install -y --no-install-recommends gdisk dosfstools e2fsprogs util-linux parted kpartx curl ca-certificates zip unzip \
+          apt_retry install -y --no-install-recommends gdisk dosfstools e2fsprogs util-linux parted kpartx curl ca-certificates zip unzip hfsprogs \
             || { echo '::error::apt-get install of base tools failed'; exit 1; }
+          command -v mkfs.hfsplus >/dev/null || { echo '::error::mkfs.hfsplus missing after hfsprogs install'; exit 1; }
           if [ "$ARCH" = aarch64 ]; then
             echo "[workflow] aarch64 requested: installing qemu-user-static for emulation"
             apt_retry install -y --no-install-recommends qemu-user-static binfmt-support \
@@ -165,6 +166,18 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      - name: Step 5e - build Infinite Mac HFS+ disk (HomeCoffee-InfiniteMac.img)
+        shell: bash
+        run: |
+          set -o pipefail
+          sudo -E OUT_DIR="$PWD/build" bash scripts/build-infinitemac-disk.sh 2>&1 | tee build-infinitemac.log
+          rc=${PIPESTATUS[0]}
+          if [ "$rc" -ne 0 ]; then echo '::error::build-infinitemac-disk.sh failed'; exit "$rc"; fi
+          sudo chown "$(id -u):$(id -g)" build/HomeCoffee-InfiniteMac.img
+          cd build
+          sha256sum HomeCoffee-InfiniteMac.img > HomeCoffee-InfiniteMac.img.sha256
+          ls -lh HomeCoffee-InfiniteMac.img HomeCoffee-InfiniteMac.img.sha256
+
       - name: Step 6 - package HomeCoffee-1.0-<arch>.utm.zip (max compression)
         shell: bash
         run: |
@@ -194,6 +207,16 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Step 7b - upload Infinite Mac disk artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HomeCoffee-InfiniteMac.img
+          path: |
+            build/HomeCoffee-InfiniteMac.img
+            build/HomeCoffee-InfiniteMac.img.sha256
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Step 8 - publish to nightly GitHub Release
         if: success()
         uses: softprops/action-gh-release@v2
@@ -206,11 +229,14 @@ jobs:
           body: |
             HomeCoffee 1.0 (Kofi / Домокофе), automated build from commit ${{ github.sha }} (${{ github.ref_name }}).
             Architecture: ${{ env.ARCH }}. Download HomeCoffee-1.0-${{ env.ARCH }}.utm.zip, unzip it, and open HomeCoffee 1.0.utm in UTM.
+            Infinite Mac: download HomeCoffee-InfiniteMac.img (HFS+ data disk, see docs/INFINITE_MAC.md; not bootable, compatibility unverified).
             Settings: Q35, x86_64, UEFI, 512 MB RAM, 2 cores, VGA display, 2 GB virtio disk, PS/2 keyboard on.
             The desktop starts automatically on tty1. Full GUI desktop (Xorg, Chromium kiosk, nodejs). This is a development build.
           files: |
             build/HomeCoffee-1.0-${{ env.ARCH }}.utm.zip
             build/HomeCoffee-1.0-${{ env.ARCH }}.utm.zip.sha256
+            build/HomeCoffee-InfiniteMac.img
+            build/HomeCoffee-InfiniteMac.img.sha256
 
       - name: Step 9 - upload build log on failure
         if: failure()
