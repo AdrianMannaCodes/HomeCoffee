@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds build/HomeCoffee-InfiniteMac.img: a raw HFS+ volume named "HomeCoffee" holding the Aqua UI, assets, docs and a Read Me for classic Mac OS X hosts. Must run as root (loop mount). See docs/INFINITE_MAC.md.
+# Builds build/HomeCoffee-InfiniteMac.img: a device image with an Apple Partition Map (ER driver descriptor + PM map) and one HFS+ partition named "HomeCoffee" holding the Aqua UI, assets, docs and a Read Me. Classic emulators (PearPC, DingusPPC, SheepShaver) need the map; a bare superfloppy HFS+ volume is not recognised. Must run as root. See docs/INFINITE_MAC.md.
 # Env: IMG_SIZE_MB (default 64), OUT_DIR (default <repo>/build).
 set -euo pipefail
 
@@ -8,16 +8,19 @@ OUT_DIR="${OUT_DIR:-$ROOT/build}"
 IMG="$OUT_DIR/HomeCoffee-InfiniteMac.img"
 SIZE_MB="${IMG_SIZE_MB:-64}"
 VOL="HomeCoffee"
+MNT=""
+LOOP=""
 
-[ "$(id -u)" -eq 0 ] || { echo 'build-infinitemac-disk.sh must run as root (loop mount)' >&2; exit 1; }
-for t in truncate mkfs.hfsplus mount umount fsck.hfsplus sha256sum; do
-  command -v "$t" >/dev/null 2>&1 || { echo "missing tool: $t (apt-get install hfsprogs util-linux coreutils)" >&2; exit 1; }
+[ "$(id -u)" -eq 0 ] || { echo 'build-infinitemac-disk.sh must run as root (losetup/mount)' >&2; exit 1; }
+for t in truncate parted losetup lsblk mkfs.hfsplus mount umount fsck.hfsplus od grep sha256sum; do
+  command -v "$t" >/dev/null 2>&1 || { echo "missing tool: $t (apt-get install parted hfsprogs util-linux)" >&2; exit 1; }
 done
 
 MNT="$(mktemp -d)"
 cleanup() {
-  if mountpoint -q "$MNT"; then umount "$MNT" || true; fi
-  rmdir "$MNT" 2>/dev/null || true
+  if [ -n "$MNT" ] && mountpoint -q "$MNT"; then umount "$MNT" || true; fi
+  if [ -n "$LOOP" ]; then losetup -d "$LOOP" 2>/dev/null || true; fi
+  [ -n "$MNT" ] && rmdir "$MNT" 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -25,11 +28,24 @@ mkdir -p "$OUT_DIR"
 rm -f "$IMG"
 echo "[infinitemac] creating ${SIZE_MB} MB raw image: $IMG"
 truncate -s "${SIZE_MB}M" "$IMG"
-echo "[infinitemac] formatting HFS+ volume '$VOL'"
-mkfs.hfsplus -v "$VOL" "$IMG"
 
-echo "[infinitemac] mounting image"
-mount -t hfsplus -o loop,rw "$IMG" "$MNT"
+echo "[infinitemac] writing Apple Partition Map (mac label)"
+parted -s "$IMG" mklabel mac
+parted -s "$IMG" mkpart "$VOL" hfs+ 1MiB 100%
+
+echo "[infinitemac] attaching loop device with partitions"
+LOOP="$(losetup -fP --show "$IMG")"
+udevadm settle 2>/dev/null || true
+# The HFS+ partition is the last partition on the loop device (the map entry itself is partition 1).
+PART="$(lsblk -lnpo NAME "$LOOP" | grep -v "^$LOOP\$" | tail -n 1)"
+[ -n "$PART" ] && [ -b "$PART" ] || { echo "::error::could not find HFS partition device under $LOOP" >&2; exit 1; }
+echo "[infinitemac] HFS+ partition device: $PART"
+
+echo "[infinitemac] formatting HFS+ volume '$VOL' on $PART"
+mkfs.hfsplus -v "$VOL" "$PART"
+
+echo "[infinitemac] mounting partition"
+mount -t hfsplus -o rw "$PART" "$MNT"
 
 DEST="$MNT/HomeCoffee"
 mkdir -p "$DEST"
@@ -66,9 +82,20 @@ EOF
 sync
 umount "$MNT"
 
-echo "[infinitemac] checking volume"
-fsck.hfsplus -f "$IMG" || { echo '::error::fsck.hfsplus reported errors' >&2; exit 1; }
+echo "[infinitemac] checking HFS+ partition"
+fsck.hfsplus -f "$PART" || { echo '::error::fsck.hfsplus reported errors on the partition' >&2; exit 1; }
+losetup -d "$LOOP"
+LOOP=""
+
+echo "[infinitemac] verifying Apple Partition Map"
+# Driver Descriptor Map signature 'ER' at block 0 (bytes 0-1).
+SIG0="$(od -A n -t x1 -N 2 "$IMG" | tr -d ' \n')"
+[ "$SIG0" = "4552" ] || { echo "::error::block 0 is not a driver descriptor map (got $SIG0, want 4552 'ER')" >&2; exit 1; }
+# Partition map entry signature 'PM' at block 1 (byte 512).
+SIG1="$(dd if="$IMG" bs=1 skip=512 count=2 2>/dev/null | od -A n -t x1 | tr -d ' \n')"
+[ "$SIG1" = "504d" ] || { echo "::error::block 1 is not a partition map entry (got $SIG1, want 504d 'PM')" >&2; exit 1; }
+grep -a -q 'Apple_HFS' "$IMG" || { echo '::error::Apple_HFS partition type not found in the image' >&2; exit 1; }
 
 BYTES=$(stat -c %s "$IMG")
-echo "[infinitemac] wrote $IMG (${BYTES} bytes)"
+echo "[infinitemac] wrote $IMG (${BYTES} bytes), APM with HFS+ partition verified"
 echo "[infinitemac] done"
