@@ -1,0 +1,35 @@
+/* Infinite Mac window: brushed-metal titlebar and aqua pill buttons, matching the HomeCoffee 1.0 Aqua look. */
+
+.infinitemac-window { min-width: 420px; min-height: 320px; }
+
+.infinitemac-titlebar {
+  background: linear-gradient(#f3f4f7 0%, #d5d9e1 48%, #b9bfcb 52%, #dfe3ea 100%);
+  border-bottom: 1px solid #6b7486;
+}
+.infinitemac-titlebar .title { color: #2b3240; text-shadow: 0 1px 0 rgba(255,255,255,.7); }
+
+.infinitemac-view {
+  position: relative; flex: 1; min-height: 0; background: #1b1f27;
+  display: flex; align-items: stretch; justify-content: stretch;
+}
+.infinitemac-frame { flex: 1; width: 100%; height: 100%; border: 0; display: block; background: #000; }
+
+.infinitemac-fallback {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(#1b3b6b, #0b1a33); color: #e8f1ff; padding: 16px;
+}
+.infinitemac-fallback[hidden] { display: none; }
+.infinitemac-fb-box { max-width: 420px; text-align: center; }
+.infinitemac-fb-h { font-size: 18px; margin-bottom: 8px; }
+.infinitemac-fb-box p { font-size: 13px; line-height: 1.4; margin: 0 0 12px; }
+.infinitemac-pill {
+  display: inline-block; color: #fff; text-decoration: none; font-size: 13px;
+  padding: 6px 16px; border-radius: 999px; border: 1px solid #1d4c99;
+  background: linear-gradient(#8fc1ff, #2f6fd0);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.6);
+}
+
+.infinitemac-status { min-height: 18px; }
+
+.dock-infinitemac { background: linear-gradient(#f4f5f8, #9ea5b3); }
+.dock-infinitemac svg { width: 100%; height: 100%; }
