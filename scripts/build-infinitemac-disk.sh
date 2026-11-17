@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds build/HomeCoffee-InfiniteMac.img: a device image with an Apple Partition Map (ER driver descriptor + PM map) and one HFS+ partition named "HomeCoffee" holding the Aqua UI, assets, docs and a Read Me. Classic emulators (PearPC, DingusPPC, SheepShaver) need the map; a bare superfloppy HFS+ volume is not recognised. Must run as root. See docs/INFINITE_MAC.md.
-# Env: IMG_SIZE_MB (default 64), OUT_DIR (default <repo>/build).
+# Env: IMG_SIZE_MB (default 64, keep at or below 128 for iPad/mobile Safari), OUT_DIR (default <repo>/build).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -10,6 +10,11 @@ SIZE_MB="${IMG_SIZE_MB:-64}"
 VOL="HomeCoffee"
 MNT=""
 LOOP=""
+
+[[ "$SIZE_MB" =~ ^[0-9]+$ ]] || { echo "::error::IMG_SIZE_MB must be a whole number of MB (got $SIZE_MB)" >&2; exit 1; }
+if [ "$SIZE_MB" -gt 128 ]; then
+  echo "[infinitemac] warning: ${SIZE_MB} MB is above the 128 MB ceiling for iPad/mobile Safari; use 64 unless you have a reason" >&2
+fi
 
 [ "$(id -u)" -eq 0 ] || { echo 'build-infinitemac-disk.sh must run as root (losetup/mount)' >&2; exit 1; }
 for t in truncate parted losetup lsblk mkfs.hfsplus mount umount fsck.hfsplus od grep sha256sum; do
