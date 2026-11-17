@@ -165,3 +165,49 @@ body {
 
 /* Home app windows are draggable too; their window-body keeps the Tiger metal feel */
 #home-window .titlebar, #chat-window .titlebar { cursor: move; }
+
+/* ===== 4:3 iPad (1024x768 landscape, 768x1024 portrait) and touch tuning =====
+   Only layout, hit-target and touch behaviour changes here. Brushed metal, glass shelf,
+   pinstripes and jelly button gradients above are unchanged. */
+
+/* No page scrolling or bounce on iPad; the stage is scaled to fit and clipped to the screen. */
+html, body { overscroll-behavior: none; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; touch-action: manipulation; }
+#stage { overflow: hidden; }
+
+/* Dock: keep the glass shelf inside the stage on 4:3 and never create a scrollbar. */
+#dock {
+  box-sizing: border-box; min-width: 0; max-width: calc(100% - 16px); overflow: visible;
+  bottom: max(8px, env(safe-area-inset-bottom, 0px));
+  padding: 6px 12px 10px; gap: 10px;
+  -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
+}
+.dock-item {
+  min-width: 48px; min-height: 48px; flex-shrink: 0;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+}
+@media (hover: none) {
+  /* Touch screens have no hover, so skip the lift that would leave a stuck state after a tap. */
+  .dock-item:hover { transform: none; }
+}
+
+/* Touch hit-targets: keep the visual size, grow the tappable area for fingers. */
+.light { position: relative; }
+.light::before { content: ""; position: absolute; inset: -8px; border-radius: 50%; }
+.aqua-btn, .pill, .seg button, .tabs button, .side-item, .fs-item, .fs-list td {
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+@media (pointer: coarse) {
+  .aqua-btn, .pill, .seg button, .tabs button { min-height: 36px; }
+  .side-item { padding: 8px; }
+  .fs-item { padding: 8px 6px; }
+}
+
+/* Window dragging uses pointer events, so the browser must not pan the page while the titlebar is dragged. */
+.titlebar { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+#menubar, .metal-toolbar, .fs-status { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+
+/* Text entry stays selectable and editable; everything else is not. */
+.aqua-field, .notes-text, .konsol-input, .konsol pre, .fs-path {
+  -webkit-user-select: text; user-select: text; touch-action: auto;
+}
