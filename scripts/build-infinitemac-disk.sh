@@ -38,6 +38,22 @@ echo "[infinitemac] writing Apple Partition Map (mac label)"
 parted -s "$IMG" mklabel mac
 parted -s "$IMG" mkpart "$VOL" hfs+ 1MiB 100%
 
+# parted does not reliably write the Driver Descriptor Record, so write it explicitly at block 0.
+# DDR layout (big-endian): 'ER' at 0, block size 512 at 2, block count at 4, device type 1 at 8, device id 1 at 10, driver data 0 at 12, driver count 0 at 16.
+echo "[infinitemac] writing Driver Descriptor Record (block 0)"
+TOTAL_BLOCKS=$(( SIZE_MB * 2048 ))
+DDR_TMP="$(mktemp)"
+be32() { printf "\\x$(printf %02x $(( ($1 >> 24) & 255 )))\\x$(printf %02x $(( ($1 >> 16) & 255 )))\\x$(printf %02x $(( ($1 >> 8) & 255 )))\\x$(printf %02x $(( $1 & 255 )))"; }
+{
+  printf 'ER'
+  printf '\x02\x00'
+  be32 "$TOTAL_BLOCKS"
+  printf '\x00\x01\x00\x01\x00\x00\x00\x00\x00\x00'
+} > "$DDR_TMP"
+truncate -s 512 "$DDR_TMP"
+dd if="$DDR_TMP" of="$IMG" bs=512 count=1 conv=notrunc status=none
+rm -f "$DDR_TMP"
+
 echo "[infinitemac] attaching loop device with partitions"
 LOOP="$(losetup -fP --show "$IMG")"
 udevadm settle 2>/dev/null || true
