@@ -5,7 +5,7 @@
   var WM = window.RedStarWM;
   if (!stage || !WM) return;
   var root = document.documentElement;
-  var ORIGIN = 'https://infinitemac.org';
+  var ORIGIN = 'https://infinitemac.org/embed';
   // Base URL of a CORS-enabled proxy or Worker that serves the disk image. Leave null until one is deployed.
   var DISK_PROXY_BASE = null;
   var MACHINE = 'Power Macintosh G4';
