@@ -5,7 +5,7 @@
   var WM = window.RedStarWM;
   if (!stage || !WM) return;
   var root = document.documentElement;
-  var ORIGIN = 'https://infinitemac.org/';
+  var ORIGIN = 'https://infinitemac.org/embed';
   var TITLE = 'Macintosh G4';
   var LOAD_TIMEOUT = 15000;
   var SANDBOX = 'allow-scripts allow-forms allow-popups allow-pointer-lock allow-downloads';
