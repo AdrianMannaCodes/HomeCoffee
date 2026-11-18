@@ -8,7 +8,7 @@
   var ORIGIN = 'https://infinitemac.org/embed';
   // Base URL of a CORS-enabled proxy or Worker that serves the disk image. Leave null until one is deployed.
   var DISK_PROXY_BASE = null;
-  var MACHINE = 'Power Macintosh G4';
+  var MACHINE = 'Power Macintosh G4 (PCI Graphics)';
   var TITLE = 'Macintosh G4';
   var LOAD_TIMEOUT = 15000;
   var SANDBOX = 'allow-scripts allow-forms allow-popups allow-pointer-lock allow-downloads';
