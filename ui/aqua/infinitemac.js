@@ -6,7 +6,9 @@
   if (!stage || !WM) return;
   var root = document.documentElement;
   var ORIGIN = 'https://infinitemac.org/embed';
-  // Disk image mounted via disk_url. Hosted on archive.org (an Infinite Mac supported disk site); uploaded by the nightly workflow (item homecoffee-infinitemac).
+  // Boot disk: Infinite Mac system disk key, displayName + " - " + displaySubtitle (disks.ts MAC_OS_X_10_4_11, preferredMachine POWER_MACINTOSH_G4_PEARPC).
+  var SYSTEM_DISK = 'Mac OS X 10.4 - Tiger';
+  // Additional disk, added the way Infinite Mac's plus button does: a repeated disk_url parameter (run-def.ts reads searchParams.getAll("disk_url")). Hosted on archive.org; uploaded by the nightly workflow (item homecoffee-infinitemac).
   var DISK_URL = 'https://archive.org/download/homecoffee-infinitemac/HomeCoffee-InfiniteMac.img';
   var MACHINE = 'Power Macintosh G4 (PCI Graphics)';
   var TITLE = 'Macintosh G4';
@@ -20,11 +22,12 @@
   function mk(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
   function scale() { return parseFloat(getComputedStyle(root).getPropertyValue('--display-scale')) || 1; }
 
-  // Builds the embed URL with search params.
+  // Builds the embed URL: machine, boot system disk (disk), then the extra disk (disk_url).
   function buildEmbedUrl() {
     var params = new URLSearchParams();
     params.set('machine', MACHINE);
-    params.set('disk_url', DISK_URL);
+    params.append('disk', SYSTEM_DISK);
+    params.append('disk_url', DISK_URL);
     return ORIGIN + '?' + params.toString();
   }
 
