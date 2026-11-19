@@ -1,4 +1,4 @@
-// Pabari: Aqua web browser window. Browser only. Pages load in an iframe; external sites that refuse framing get a fallback message.
+// Pabari: Aqua web browser window. Browser only. External http(s) pages load through /cgi-bin/pabari-proxy.cgi, which strips X-Frame-Options and frame-ancestors so they can display in the iframe.
 (function () {
   'use strict';
   var stage = document.getElementById('stage');
@@ -6,7 +6,8 @@
   if (!stage || !WM) return;
   var root = document.documentElement;
   var HOME = 'about:home';
-  var LOAD_TIMEOUT = 10000;
+  var PROXY = '/cgi-bin/pabari-proxy.cgi?url=';
+  var LOAD_TIMEOUT = 15000;
   var SB_LOCAL = 'allow-scripts allow-same-origin allow-forms allow-popups';
   var SB_EXT = 'allow-scripts allow-forms allow-popups';
   var BOOKMARKS = [
@@ -71,8 +72,9 @@
     var external = isExternal(u);
     ui.frame.removeAttribute('srcdoc');
     ui.frame.setAttribute('sandbox', external ? SB_EXT : SB_LOCAL);
-    ui.frame.src = u;
-    setStatus(external ? 'Loading ' + u + '...' : 'Opening ' + u + '...');
+    // External pages go through the proxy so frame-blocking headers never reach the browser.
+    ui.frame.src = external ? PROXY + encodeURIComponent(u) : u;
+    setStatus(external ? 'Loading ' + u + ' through the proxy...' : 'Opening ' + u + '...');
     st.timer = setTimeout(function () {
       setStatus('No response from ' + u + '.');
       if (external) showFallback(u, true);
@@ -83,7 +85,7 @@
     clearTimeout(st.timer);
     if (st.url === HOME) { setStatus('Home'); return; }
     if (isExternal(st.url)) {
-      setStatus('Loaded. If the page is blank, the site does not allow display inside another window. Use the address link to open it in a new tab.');
+      setStatus('Loaded through the proxy. If the page is blank, the site could not be fetched; use the address link to open it in a new tab.');
       return;
     }
     try {
@@ -111,7 +113,7 @@
         '<iframe id="pb-frame" class="pabari-frame" title="Web page"></iframe>' +
         '<div class="pabari-fallback" id="pb-fallback" hidden><div class="pabari-fb-box">' +
           '<div class="pabari-fb-h">This page cannot be shown here</div>' +
-          '<p>Many websites refuse to open inside another window, because their security settings block framing. Open the page in a new tab instead.</p>' +
+          '<p>The page could not be loaded through the proxy. Open it in a new tab instead.</p>' +
           '<a id="pb-fb-link" class="pabari-pill pabari-fb-link" target="_blank" rel="noopener noreferrer"></a>' +
         '</div></div>' +
       '</div>' +
