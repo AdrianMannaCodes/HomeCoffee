@@ -1,0 +1,25 @@
+/* Setup Assistant: classic Aqua look. Works at 19:16 (landscape) and 4:3 (iPad 8, 1024x768). */
+.sa-window { min-width: 320px; }
+.sa-head { padding: 8px 14px 4px; background: linear-gradient(#f4f8fd, #dfe8f4); border-bottom: 1px solid #9aa9bf; }
+.sa-step { font-weight: 700; font-size: 13px; color: #1d2430; }
+.sa-bar { display: flex; gap: 6px; margin-top: 6px; }
+.sa-dot { width: 22px; height: 6px; border-radius: 3px; background: #c4cfdf; border: 1px solid #8fa0ba; }
+.sa-dot.done { background: #7bb7ef; }
+.sa-dot.on { background: linear-gradient(#8fc1ff, #2f6fd0); }
+.sa-body { flex: 1; min-height: 0; overflow: auto; padding: 14px 18px; background: #fbfcfe; font-size: 13px; color: #1d2430; }
+.sa-lead { font-size: 14px; margin: 0 0 10px; }
+.sa-h { font-weight: 700; margin: 12px 0 6px; }
+.sa-note { color: #4a5366; font-size: 12px; margin-top: 10px; }
+.sa-sub { color: #4a5366; font-size: 12px; margin: -2px 0 8px 22px; }
+.sa-opt { display: block; margin: 6px 0; cursor: pointer; }
+.sa-field { display: block; margin: 8px 0; }
+.sa-field input { display: block; width: 100%; max-width: 320px; margin-top: 3px; box-sizing: border-box; }
+.sa-select { max-width: 320px; }
+.sa-badges { display: flex; gap: 10px; margin-top: 6px; }
+.sa-badge { width: 40px; height: 40px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px #6b7a92, inset 0 2px 3px rgba(255,255,255,.6); cursor: pointer; padding: 0; }
+.sa-badge.sel { box-shadow: 0 0 0 3px #2f6fd0; }
+.sa-foot { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: linear-gradient(#eef3fa, #d6e0ee); border-top: 1px solid #9aa9bf; }
+.sa-err { flex: 1; color: #b3201a; font-size: 12px; }
+.sa-done { padding: 24px; text-align: center; }
+@media (max-aspect-ratio: 4/3) { .sa-window { width: 100% !important; } }
+@media (max-width: 760px) { .sa-body { padding: 10px 12px; } }
