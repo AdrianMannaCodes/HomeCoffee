@@ -6,8 +6,8 @@
   if (!stage || !WM) return;
   var root = document.documentElement;
   var ORIGIN = 'https://infinitemac.org/embed';
-  // Base URL of a CORS-enabled proxy or Worker that serves the disk image. Leave null until one is deployed.
-  var DISK_PROXY_BASE = null;
+  // Disk image mounted via disk_url. Hosted on archive.org (an Infinite Mac supported disk site); uploaded by the nightly workflow (item homecoffee-infinitemac).
+  var DISK_URL = 'https://archive.org/download/homecoffee-infinitemac/HomeCoffee-InfiniteMac.img';
   var MACHINE = 'Power Macintosh G4 (PCI Graphics)';
   var TITLE = 'Macintosh G4';
   var LOAD_TIMEOUT = 15000;
@@ -20,11 +20,11 @@
   function mk(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
   function scale() { return parseFloat(getComputedStyle(root).getPropertyValue('--display-scale')) || 1; }
 
-  // Builds the embed URL with search params. disk_url is only added when a proxy base is configured.
+  // Builds the embed URL with search params.
   function buildEmbedUrl() {
     var params = new URLSearchParams();
     params.set('machine', MACHINE);
-    if (DISK_PROXY_BASE) params.set('disk_url', DISK_PROXY_BASE);
+    params.set('disk_url', DISK_URL);
     return ORIGIN + '?' + params.toString();
   }
 
