@@ -6,6 +6,9 @@
   if (!stage || !WM) return;
   var root = document.documentElement;
   var ORIGIN = 'https://infinitemac.org/embed';
+  // Disk image mounted via disk_url. Hosted on archive.org (an Infinite Mac supported disk site); uploaded by the nightly workflow (item homecoffee-infinitemac).
+  var DISK_URL = 'https://archive.org/download/homecoffee-infinitemac/HomeCoffee-InfiniteMac.img';
+  var MACHINE = 'Power Macintosh G4 (PCI Graphics)';
   var TITLE = 'Macintosh G4';
   var LOAD_TIMEOUT = 15000;
   var SANDBOX = 'allow-scripts allow-forms allow-popups allow-pointer-lock allow-downloads';
@@ -16,6 +19,14 @@
 
   function mk(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
   function scale() { return parseFloat(getComputedStyle(root).getPropertyValue('--display-scale')) || 1; }
+
+  // Builds the embed URL with search params.
+  function buildEmbedUrl() {
+    var params = new URLSearchParams();
+    params.set('machine', MACHINE);
+    params.set('disk_url', DISK_URL);
+    return ORIGIN + '?' + params.toString();
+  }
 
   function setStatus(t) { ui.status.textContent = t; }
   function showFallback(show) {
@@ -31,7 +42,7 @@
     ui.frame.setAttribute('sandbox', SANDBOX);
     ui.frame.setAttribute('allow', 'fullscreen; cross-origin-isolated');
     ui.frame.setAttribute('referrerpolicy', 'no-referrer-when-downgrade');
-    ui.frame.src = ORIGIN;
+    ui.frame.src = buildEmbedUrl();
     setStatus('Starting ' + TITLE + '...');
     clearTimeout(st.timer);
     st.timer = setTimeout(function () {

@@ -238,6 +238,32 @@ jobs:
             build/HomeCoffee-InfiniteMac.img
             build/HomeCoffee-InfiniteMac.img.sha256
 
+      - name: Step 8b - upload Infinite Mac disk to archive.org (item homecoffee-infinitemac)
+        if: success()
+        shell: bash
+        env:
+          IA_ACCESS_KEY: ${{ secrets.IA_ACCESS_KEY }}
+          IA_SECRET_KEY: ${{ secrets.IA_SECRET_KEY }}
+          IA_ITEM: homecoffee-infinitemac
+        run: |
+          set -euo pipefail
+          if [ -z "$IA_ACCESS_KEY" ] || [ -z "$IA_SECRET_KEY" ]; then
+            echo '::error::IA_ACCESS_KEY or IA_SECRET_KEY secret is not set'; exit 1
+          fi
+          cd build
+          for FILE in HomeCoffee-InfiniteMac.img HomeCoffee-InfiniteMac.img.sha256; do
+            echo "[archive.org] uploading $FILE to item $IA_ITEM"
+            curl -sS --fail --retry 3 -X PUT \
+              -H "authorization: LOW $IA_ACCESS_KEY:$IA_SECRET_KEY" \
+              -H "x-archive-auto-make-bucket: 1" \
+              -H "x-archive-meta-mediatype: software" \
+              -H "x-archive-meta-title: HomeCoffee Infinite Mac disk image" \
+              -H "x-archive-meta-description: HFS+ data disk built from AdrianMannaCodes/HomeCoffee. Automated nightly build." \
+              --upload-file "$FILE" \
+              "https://s3.us.archive.org/$IA_ITEM/$FILE"
+            echo "[archive.org] uploaded $FILE"
+          done
+
       - name: Step 9 - upload build log on failure
         if: failure()
         uses: actions/upload-artifact@v4
