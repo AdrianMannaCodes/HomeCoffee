@@ -1,8 +1,17 @@
 #!/bin/sh
-# Pabari proxy: fetches an http(s) page for the Pabari iframe and drops X-Frame-Options and frame-ancestors CSP so it can be shown. Loopback clients only; private and local hosts are refused.
+# Pabari proxy: fetches an http(s) page for the Pabari iframe and drops X-Frame-Options and frame-ancestors CSP so it can be shown.
+# Clients: loopback and private LAN subnets (RFC1918, IPv6 ULA), so an iPad on the home Wi-Fi can use it.
+# Disable: create /etc/homecoffee/pabari-proxy.off to refuse all requests; remove it to re-enable.
+# Targets: only public http(s) hosts; localhost and private ranges are always refused (SSRF guard).
+if [ -e /etc/homecoffee/pabari-proxy.off ]; then
+  printf 'Status: 503 Service Unavailable\r\nContent-Type: application/json\r\n\r\n{"ok":false,"error":"proxy disabled"}\n'; exit 0
+fi
 case "$REMOTE_ADDR" in
   127.0.0.1|::1|::ffff:127.0.0.1) ;;
-  *) printf 'Status: 403 Forbidden\r\nContent-Type: application/json\r\n\r\n{"ok":false,"error":"forbidden"}\n'; exit 0 ;;
+  10.*|192.168.*|172.1[6-9].*|172.2[0-9].*|172.3[0-1].*) ;;
+  ::ffff:10.*|::ffff:192.168.*|::ffff:172.1[6-9].*|::ffff:172.2[0-9].*|::ffff:172.3[0-1].*) ;;
+  fc*|fd*|FC*|FD*) ;;
+  *) printf 'Status: 403 Forbidden\r\nContent-Type: application/json\r\n\r\n{"ok":false,"error":"client not on the local network"}\n'; exit 0 ;;
 esac
 fail() { printf 'Status: %s\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n%s\n' "$1" "$2"; exit 0; }
 urldecode() { printf '%b' "$(printf '%s' "$1" | sed 's/+/ /g; s/%/\\x/g')"; }
