@@ -43,12 +43,18 @@ parted -s "$IMG" mkpart "$VOL" hfs+ 1MiB 100%
 echo "[infinitemac] writing Driver Descriptor Record (block 0)"
 TOTAL_BLOCKS=$(( SIZE_MB * 2048 ))
 DDR_TMP="$(mktemp)"
-be32() { printf "\\x$(printf %02x $(( ($1 >> 24) & 255 )))\\x$(printf %02x $(( ($1 >> 16) & 255 )))\\x$(printf %02x $(( ($1 >> 8) & 255 )))\\x$(printf %02x $(( $1 & 255 )))"; }
+# be16/be32 emit raw big-endian bytes. The inner printf builds a format string of octal escapes (\NNN),
+# and the outer printf expands those escapes into the actual binary bytes. Octal is used because it is portable across printf implementations.
+be16() { printf "$(printf '\\%03o\\%03o' $(( ($1 >> 8) & 255 )) $(( $1 & 255 )))"; }
+be32() { printf "$(printf '\\%03o\\%03o\\%03o\\%03o' $(( ($1 >> 24) & 255 )) $(( ($1 >> 16) & 255 )) $(( ($1 >> 8) & 255 )) $(( $1 & 255 )))"; }
 {
   printf 'ER'
-  printf '\x02\x00'
+  be16 512
   be32 "$TOTAL_BLOCKS"
-  printf '\x00\x01\x00\x01\x00\x00\x00\x00\x00\x00'
+  be16 1
+  be16 1
+  be32 0
+  be16 0
 } > "$DDR_TMP"
 truncate -s 512 "$DDR_TMP"
 dd if="$DDR_TMP" of="$IMG" bs=512 count=1 conv=notrunc status=none
@@ -112,6 +118,12 @@ echo "[infinitemac] verifying Apple Partition Map"
 # Driver Descriptor Map signature 'ER' at block 0 (bytes 0-1).
 SIG0="$(od -A n -t x1 -N 2 "$IMG" | tr -d ' \n')"
 [ "$SIG0" = "4552" ] || { echo "::error::block 0 is not a driver descriptor map (got $SIG0, want 4552 'ER')" >&2; exit 1; }
+# DDR block size 512 (0x0200) at bytes 2-3, and block count at bytes 4-7 must match TOTAL_BLOCKS.
+DDR_BS="$(dd if="$IMG" bs=1 skip=2 count=2 2>/dev/null | od -A n -t x1 | tr -d ' \n')"
+[ "$DDR_BS" = "0200" ] || { echo "::error::DDR block size is not 512 (got $DDR_BS, want 0200)" >&2; exit 1; }
+DDR_BC="$(dd if="$IMG" bs=1 skip=4 count=4 2>/dev/null | od -A n -t x1 | tr -d ' \n')"
+WANT_BC="$(printf '%08x' "$TOTAL_BLOCKS")"
+[ "$DDR_BC" = "$WANT_BC" ] || { echo "::error::DDR block count mismatch (got $DDR_BC, want $WANT_BC)" >&2; exit 1; }
 # Partition map entry signature 'PM' at block 1 (byte 512).
 SIG1="$(dd if="$IMG" bs=1 skip=512 count=2 2>/dev/null | od -A n -t x1 | tr -d ' \n')"
 [ "$SIG1" = "504d" ] || { echo "::error::block 1 is not a partition map entry (got $SIG1, want 504d 'PM')" >&2; exit 1; }
