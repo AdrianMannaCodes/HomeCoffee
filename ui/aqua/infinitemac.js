@@ -22,12 +22,13 @@
   function mk(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
   function scale() { return parseFloat(getComputedStyle(root).getPropertyValue('--display-scale')) || 1; }
 
-  // Builds the embed URL: machine, boot system disk (disk), then the extra disk (disk_url).
+  // Builds the embed URL: machine, boot system disk (disk), the extra disk (disk_url), and library=false to skip the background software catalog load (run-def.ts: includeLibrary = library !== "false").
   function buildEmbedUrl() {
     var params = new URLSearchParams();
     params.set('machine', MACHINE);
     params.append('disk', SYSTEM_DISK);
     params.append('disk_url', DISK_URL);
+    params.set('library', 'false');
     return ORIGIN + '?' + params.toString();
   }
 
